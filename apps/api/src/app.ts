@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express, { type Express, type RequestHandler } from 'express';
-import helmet from 'helmet';
+import * as helmetModule from 'helmet';
 import {
   API_ADMIN_BASE_PATH,
   API_ADMIN_CHARITIES_PATH,
@@ -53,6 +53,15 @@ import { createScoresRouter } from './scores/routes.js';
 import type { ScoreService } from './scores/service.js';
 import { createMyWinnersRouter, createWinnersAdminRouter } from './winners/routes.js';
 import type { WinnerService } from './winners/service.js';
+
+// A plain default import (`import helmet from 'helmet'`) is unreliable under NodeNext module
+// resolution: helmet's package.json "exports" map has no explicit "types" condition, so which
+// declaration file (and therefore which default-export interop TypeScript infers) gets picked can
+// vary by environment (works locally, failed on Vercel with "has no call signatures" — TS2349).
+// Importing the namespace and reading `.default` sidesteps that interop detection entirely; both of
+// helmet's declaration files type `.default` identically as the callable `Helmet` function, and
+// Node's real ESM loader always exposes `.default` the same way regardless of the module's own format.
+const helmet = helmetModule.default;
 
 export interface AppDeps {
   /** Authentication dependencies. When absent, every authenticated route answers 503. */
