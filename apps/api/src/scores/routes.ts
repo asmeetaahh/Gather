@@ -37,16 +37,21 @@ export function createScoresRouter(service: ScoreService): Router {
 
   router.post('/', async (req, res) => {
     const input = parseCreateScore(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // `Parsed<T>` narrows on `ok`, but negating `!input.ok` does not always narrow it in every
+    // toolchain (seen as TS2339 "Property 'errors' does not exist on type 'Parsed<T>'"). Narrowing on
+    // the `errors` property itself — which only the failure variant has — is equivalent at runtime
+    // (a parse either produced errors or a value, never neither/both) and narrows reliably either way.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: CreateScoreResponse = await service.add(callerId(req), input.value);
     res.status(201).json(body);
   });
 
   router.put('/:playedOn', async (req, res) => {
     const date = parsePlayedOnParam(req.params.playedOn);
-    if (!date.ok) throw new ValidationError(date.errors);
+    // See the identical comment in the POST '/' handler above.
+    if ('errors' in date) throw new ValidationError(date.errors);
     const input = parseUpdateScore(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: UpdateScoreResponse = {
       score: await service.edit(callerId(req), date.value, input.value.stablefordScore),
     };
@@ -55,7 +60,8 @@ export function createScoresRouter(service: ScoreService): Router {
 
   router.delete('/:playedOn', async (req, res) => {
     const date = parsePlayedOnParam(req.params.playedOn);
-    if (!date.ok) throw new ValidationError(date.errors);
+    // See the identical comment in the POST '/' handler above.
+    if ('errors' in date) throw new ValidationError(date.errors);
     await service.remove(callerId(req), date.value);
     res.status(204).end();
   });
