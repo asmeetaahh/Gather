@@ -40,7 +40,11 @@ export function createMyWinnersRouter(service: WinnerService): Router {
   router.post('/:id/proof', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const input = parseRegisterWinnerProofRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // `Parsed<T>` narrows on `ok`, but negating `!input.ok` does not always narrow it in every
+    // toolchain (seen as TS2339 "Property 'errors' does not exist on type 'Parsed<T>'"). Narrowing on
+    // the `errors` property itself — which only the failure variant has — is equivalent at runtime
+    // (a parse either produced errors or a value, never neither/both) and narrows reliably either way.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: WinnerResponse = {
       winner: await service.registerProof(req.params.id, callerId(req), input.value),
     };
@@ -79,7 +83,8 @@ export function createWinnersAdminRouter(service: WinnerService): Router {
   router.post('/:id/review', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const input = parseReviewWinnerRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // See the identical comment in the POST '/:id/proof' handler above.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: WinnerResponse = {
       winner: await service.review(req.params.id, callerId(req), input.value),
     };
