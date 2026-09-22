@@ -1,10 +1,16 @@
 import type { Session } from '@supabase/supabase-js';
 import { vi } from 'vitest';
 import type {
+  AdminCharityDto,
   AppRole,
   CharityDetailDto,
   CharityPreferenceDto,
   CharitySummaryDto,
+  DrawDetailDto,
+  DrawMode,
+  DrawStatus,
+  DrawSummaryDto,
+  DrawTierResultDto,
   MeResponse,
   MyDrawParticipationDto,
   PayoutStatus,
@@ -195,6 +201,33 @@ export function stubWinner(n: number, overrides: Partial<StubWinner> = {}): Stub
   };
 }
 
+/** A seeded draw for `stubApi({ adminDraws })` (admin draw management, PRD §11 ADM-02/03/04). */
+export interface StubAdminDraw {
+  id: string;
+  drawMonth: string;
+  mode: DrawMode;
+  status: DrawStatus;
+  currency: string | null;
+  prizePoolMinor: number | null;
+  activeSubscriberCount: number | null;
+  winningNumbers: number[] | null;
+  tierResults: DrawTierResultDto[];
+}
+export function stubAdminDraw(n: number, overrides: Partial<StubAdminDraw> = {}): StubAdminDraw {
+  return {
+    id: `00000000-0000-4000-a000-${String(n).padStart(12, '0')}`,
+    drawMonth: '2027-01-01',
+    mode: 'random',
+    status: 'draft',
+    currency: null,
+    prizePoolMinor: null,
+    activeSubscriberCount: null,
+    winningNumbers: null,
+    tierResults: [],
+    ...overrides,
+  };
+}
+
 /**
  * Stubs `fetch` as the GATHER API. `users` maps access tokens to the profile the API would return; any
  * other token gets a 401, like the real verifier. Every request is recorded in `calls`.
@@ -232,6 +265,10 @@ export function stubApi(
     scores?: Record<string, ScoreDto[]>;
     /** Each user's published-draw participation, by access token (default: none; read-only). */
     draws?: Record<string, MyDrawParticipationDto[]>;
+    /** Seeded draws for `/api/admin/draws/*` (see `stubAdminDraw`). */
+    adminDraws?: StubAdminDraw[];
+    /** `/api/admin/reports`'s charity-contribution totals (default: none). */
+    charityContributions?: { currency: string; amountMinor: number }[];
   } = {},
 ) {
   const calls: {
@@ -268,6 +305,18 @@ export function stubApi(
       maxBps: options.maxBps ?? null,
     };
   };
+
+  // ---- admin: charities (PRD §11 ADM-05) — an INDEPENDENT mutable store, seeded from the same
+  // `charities`/`archived` options above. Create/edit/archive/unarchive act on this store; they do
+  // not feed back into the public directory above (that filtering is proven exhaustively at the API
+  // layer's 100+ charity tests — this fake only needs to exercise the admin UI's own behaviour).
+  const adminCharitiesStore = new Map<string, AdminCharityDto>([
+    ...listed.map((c): [string, AdminCharityDto] => [c.id, { ...c, isArchived: false }]),
+    ...(options.archived ?? []).map((c): [string, AdminCharityDto] => [
+      c.id,
+      { ...c, isArchived: true },
+    ]),
+  ]);
 
   /** The public charity endpoints (no sign-in), mirroring the API's filtering and paging. */
   function publicCharities(path: string, params: URLSearchParams): Response | null {
@@ -333,6 +382,82 @@ export function stubApi(
       percentageBps: patch.percentageBps ?? current.percentageBps,
     });
     return json(200, { preference: preferenceOf(token) });
+  }
+
+  /** `/api/admin/charities/*`: create, edit, feature and archive/unarchive (PRD §11 ADM-05). */
+  function adminCharities(
+    user: ApiUser,
+    token: string,
+    path: string,
+    method: string,
+    body: unknown,
+  ): Response {
+    const allowed = options.adminCheck ? options.adminCheck(token) === 200 : user.role === 'admin';
+    if (!allowed) return error(403, 'forbidden', 'x');
+
+    if (path === '/api/admin/charities' && method === 'GET') {
+      return json(200, { charities: [...adminCharitiesStore.values()] });
+    }
+    if (path === '/api/admin/charities' && method === 'POST') {
+      const patch = body as { slug?: string; name?: string; description?: string; tags?: string[] };
+      if (!patch.slug || !patch.name || !patch.description) {
+        return error(400, 'validation_failed', 'x');
+      }
+      if ([...adminCharitiesStore.values()].some((c) => c.slug === patch.slug)) {
+        return error(409, 'charity_slug_exists', 'A charity with that slug already exists.');
+      }
+      const id = `00000000-0000-4000-c000-${String(adminCharitiesStore.size + 1).padStart(12, '0')}`;
+      const created: AdminCharityDto = {
+        id,
+        slug: patch.slug,
+        name: patch.name,
+        description: patch.description,
+        tags: patch.tags ?? [],
+        isFeatured: false,
+        images: [],
+        upcomingEvents: [],
+        isArchived: false,
+      };
+      adminCharitiesStore.set(id, created);
+      return json(201, { charity: created });
+    }
+
+    const match = /^\/api\/admin\/charities\/([^/]+)(\/archive|\/unarchive)?$/.exec(path);
+    const id = match?.[1];
+    const charity = id ? adminCharitiesStore.get(id) : undefined;
+    if (!charity) return error(404, 'charity_not_found', 'That charity was not found.');
+
+    if (path === `/api/admin/charities/${id}` && method === 'GET') {
+      return json(200, { charity });
+    }
+    if (path === `/api/admin/charities/${id}` && method === 'PATCH') {
+      const patch = body as {
+        name?: string;
+        description?: string;
+        tags?: string[];
+        isFeatured?: boolean;
+      };
+      const updated: AdminCharityDto = {
+        ...charity,
+        ...(patch.name !== undefined && { name: patch.name }),
+        ...(patch.description !== undefined && { description: patch.description }),
+        ...(patch.tags !== undefined && { tags: patch.tags }),
+        ...(patch.isFeatured !== undefined && { isFeatured: patch.isFeatured }),
+      };
+      adminCharitiesStore.set(id as string, updated);
+      return json(200, { charity: updated });
+    }
+    if (path === `/api/admin/charities/${id}/archive` && method === 'POST') {
+      const updated: AdminCharityDto = { ...charity, isArchived: true };
+      adminCharitiesStore.set(id as string, updated);
+      return json(200, { charity: updated });
+    }
+    if (path === `/api/admin/charities/${id}/unarchive` && method === 'POST') {
+      const updated: AdminCharityDto = { ...charity, isArchived: false };
+      adminCharitiesStore.set(id as string, updated);
+      return json(200, { charity: updated });
+    }
+    return error(404, 'not_found', 'x');
   }
 
   // ---- winners (PRD §09/§11): mutable copy so upload/reopen/review/paid can change state ------
@@ -498,6 +623,318 @@ export function stubApi(
     return json(200, { draws: options.draws?.[token] ?? [] });
   }
 
+  // ---- admin: users (PRD §11 ADM-01) — a mutable copy of `options.users` so PATCH (display name)
+  // persists; everything else (scores, subscription, charity, winners) is composed from the SAME
+  // per-token stores above, mirroring the real API's "compose, don't duplicate" design.
+  const adminUserByToken = new Map(Object.entries(options.users ?? {}));
+
+  function adminUserSummary(token: string, target: ApiUser) {
+    const sub = options.subscriptions?.[token] ?? null;
+    return {
+      id: target.id,
+      email: target.email,
+      displayName: target.displayName,
+      role: target.role,
+      hasActiveSubscription: sub?.status === 'active',
+      charityName: preferenceOf(token).charity?.name ?? null,
+      scoreCount: (scoresByToken.get(token) ?? []).length,
+      createdAt: '2027-01-01T00:00:00Z',
+    };
+  }
+
+  function adminUserDetail(token: string, target: ApiUser) {
+    const sub = options.subscriptions?.[token] ?? null;
+    const pref = preferenceOf(token);
+    const mine = [...(scoresByToken.get(token) ?? [])].sort((a, b) =>
+      b.playedOn.localeCompare(a.playedOn),
+    );
+    const myWins = winners.filter((w) => w.ownerToken === token);
+    return {
+      ...adminUserSummary(token, target),
+      subscription: sub
+        ? {
+            status: sub.status,
+            planName: sub.planName,
+            currentPeriodEnd: sub.currentPeriodEnd,
+            cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+          }
+        : null,
+      charity: pref.charity,
+      percentageBps: pref.percentageBps,
+      scores: mine.map((s) => ({
+        id: s.id,
+        playedOn: s.playedOn,
+        stablefordScore: s.stablefordScore,
+      })),
+      winners: myWins.map((w) => ({
+        id: w.id,
+        drawMonth: w.drawMonth,
+        matchCount: w.matchCount,
+        prizeMinor: w.prizeMinor,
+        currency: w.currency,
+        verificationStatus: w.verificationStatus,
+        payoutStatus: w.payoutStatus,
+      })),
+    };
+  }
+
+  /** `/api/admin/users/*`: view/edit profiles, and score edits reusing the SAME subscription gate. */
+  function adminUsersRoute(
+    user: ApiUser,
+    token: string,
+    path: string,
+    method: string,
+    body: unknown,
+  ): Response {
+    const allowed = options.adminCheck ? options.adminCheck(token) === 200 : user.role === 'admin';
+    if (!allowed) return error(403, 'forbidden', 'x');
+
+    if (path === '/api/admin/users' && method === 'GET') {
+      return json(200, {
+        users: [...adminUserByToken.entries()].map(([t, u]) => adminUserSummary(t, u)),
+      });
+    }
+
+    const idMatch = /^\/api\/admin\/users\/([^/]+)(\/scores(\/([^/]+))?)?$/.exec(path);
+    const id = idMatch?.[1];
+    const entry = id ? [...adminUserByToken.entries()].find(([, u]) => u.id === id) : undefined;
+    if (!entry) return error(404, 'admin_user_not_found', 'No such user exists.');
+    const [ownerToken, target] = entry;
+
+    if (path === `/api/admin/users/${id}` && method === 'GET') {
+      return json(200, { user: adminUserDetail(ownerToken, target) });
+    }
+    if (path === `/api/admin/users/${id}` && method === 'PATCH') {
+      const patch = body as { displayName?: string };
+      if (!patch.displayName?.trim()) return error(400, 'validation_failed', 'x');
+      const updated = { ...target, displayName: patch.displayName.trim() };
+      adminUserByToken.set(ownerToken, updated);
+      return json(200, { user: adminUserDetail(ownerToken, updated) });
+    }
+
+    // The SAME subscription gate the user's own /api/scores enforces — no admin bypass.
+    const hasActiveSub = (options.subscriptions?.[ownerToken] ?? null)?.status === 'active';
+
+    if (path === `/api/admin/users/${id}/scores` && method === 'POST') {
+      if (!hasActiveSub) {
+        return error(403, 'subscription_required', 'An active subscription is required.');
+      }
+      const patch = body as { playedOn?: string; stablefordScore?: number };
+      if (!patch.playedOn || !patch.stablefordScore) return error(400, 'validation_failed', 'x');
+      const list = scoresByToken.get(ownerToken) ?? [];
+      if (list.some((s) => s.playedOn === patch.playedOn)) {
+        return error(409, 'score_date_exists', 'That user already has a score for that date.');
+      }
+      let replacedPlayedOn: string | null = null;
+      let next = list;
+      if (list.length >= 5) {
+        const oldest = [...list].sort((a, b) => a.playedOn.localeCompare(b.playedOn))[0];
+        replacedPlayedOn = oldest?.playedOn ?? null;
+        next = list.filter((s) => s.playedOn !== replacedPlayedOn);
+      }
+      const score: ScoreDto = {
+        id: `admin-score-${String(next.length + 1)}-${patch.playedOn}`,
+        playedOn: patch.playedOn,
+        stablefordScore: patch.stablefordScore,
+        createdAt: '2027-01-01T00:00:00Z',
+        updatedAt: '2027-01-01T00:00:00Z',
+      };
+      scoresByToken.set(ownerToken, [...next, score]);
+      return json(201, { score, replacedPlayedOn });
+    }
+
+    const scoreMatch = /^\/api\/admin\/users\/[^/]+\/scores\/([^/]+)$/.exec(path);
+    const playedOn = scoreMatch?.[1];
+    if (playedOn && (method === 'PUT' || method === 'DELETE')) {
+      if (!hasActiveSub) {
+        return error(403, 'subscription_required', 'An active subscription is required.');
+      }
+      const list = scoresByToken.get(ownerToken) ?? [];
+      const existing = list.find((s) => s.playedOn === playedOn);
+      if (!existing) return error(404, 'score_not_found', 'No score for that date.');
+      if (method === 'PUT') {
+        const patch = body as { stablefordScore?: number };
+        if (!patch.stablefordScore) return error(400, 'validation_failed', 'x');
+        const updated: ScoreDto = { ...existing, stablefordScore: patch.stablefordScore };
+        scoresByToken.set(
+          ownerToken,
+          list.map((s) => (s.playedOn === playedOn ? updated : s)),
+        );
+        return json(200, { score: updated });
+      }
+      scoresByToken.set(
+        ownerToken,
+        list.filter((s) => s.playedOn !== playedOn),
+      );
+      return new Response(null, { status: 204 });
+    }
+
+    return error(404, 'not_found', 'x');
+  }
+
+  // ---- admin: draws (PRD §11 ADM-02/03/04) — a mutable store, simulate/publish use fixed
+  // deterministic figures (the real number-drawing/tier-share/rollover engine is proven separately
+  // by the API's own draw-engine tests; this fake only needs to exercise the admin UI's behaviour).
+  const adminDrawsStore = new Map(
+    (options.adminDraws ?? []).map((d) => [d.id, { ...d, tierResults: [...d.tierResults] }]),
+  );
+
+  function drawSummary(d: StubAdminDraw): DrawSummaryDto {
+    return {
+      id: d.id,
+      drawMonth: d.drawMonth,
+      mode: d.mode,
+      status: d.status,
+      scheduledAt: null,
+      simulatedAt: d.status !== 'draft' ? '2027-01-05T00:00:00Z' : null,
+      publishedAt: d.status === 'published' ? '2027-01-06T00:00:00Z' : null,
+      currency: d.currency,
+      prizePoolMinor: d.prizePoolMinor,
+      activeSubscriberCount: d.activeSubscriberCount,
+    };
+  }
+  function drawDetail(d: StubAdminDraw): DrawDetailDto {
+    return { ...drawSummary(d), winningNumbers: d.winningNumbers, tierResults: d.tierResults };
+  }
+
+  function adminDrawsRoute(
+    user: ApiUser,
+    token: string,
+    path: string,
+    method: string,
+    body: unknown,
+  ): Response {
+    const allowed = options.adminCheck ? options.adminCheck(token) === 200 : user.role === 'admin';
+    if (!allowed) return error(403, 'forbidden', 'x');
+
+    if (path === '/api/admin/draws' && method === 'GET') {
+      return json(200, { draws: [...adminDrawsStore.values()].map(drawSummary) });
+    }
+    if (path === '/api/admin/draws' && method === 'POST') {
+      const patch = body as { drawMonth?: string; mode?: DrawMode };
+      if (!patch.drawMonth || !patch.mode) return error(400, 'validation_failed', 'x');
+      if ([...adminDrawsStore.values()].some((d) => d.drawMonth === patch.drawMonth)) {
+        return error(409, 'draw_month_exists', 'A draw already exists for that month.');
+      }
+      const draw = stubAdminDraw(adminDrawsStore.size + 1, {
+        drawMonth: patch.drawMonth,
+        mode: patch.mode,
+      });
+      adminDrawsStore.set(draw.id, draw);
+      return json(201, { draw: drawDetail(draw) });
+    }
+
+    const match = /^\/api\/admin\/draws\/([^/]+)(\/simulate|\/publish)?$/.exec(path);
+    const id = match?.[1];
+    const draw = id ? adminDrawsStore.get(id) : undefined;
+    if (!draw) return error(404, 'draw_not_found', 'No such draw exists.');
+
+    if (path === `/api/admin/draws/${id}` && method === 'GET') {
+      return json(200, { draw: drawDetail(draw) });
+    }
+    if (path === `/api/admin/draws/${id}/simulate` && method === 'POST') {
+      draw.status = 'simulated';
+      draw.currency = draw.currency ?? 'USD';
+      draw.prizePoolMinor = draw.prizePoolMinor ?? 10000;
+      draw.activeSubscriberCount = draw.activeSubscriberCount ?? 4;
+      draw.winningNumbers = [1, 2, 3, 4, 5];
+      draw.tierResults = [
+        {
+          matchCount: 3,
+          shareBps: 4000,
+          rollsOver: false,
+          basePoolMinor: 4000,
+          rolloverInMinor: 0,
+          winnersCount: 1,
+          prizePerWinnerMinor: 4000,
+          remainderMinor: 0,
+          rolloverOutMinor: 0,
+        },
+        {
+          matchCount: 4,
+          shareBps: 3500,
+          rollsOver: false,
+          basePoolMinor: 3500,
+          rolloverInMinor: 0,
+          winnersCount: 0,
+          prizePerWinnerMinor: 0,
+          remainderMinor: 0,
+          rolloverOutMinor: 0,
+        },
+        {
+          matchCount: 5,
+          shareBps: 2500,
+          rollsOver: true,
+          basePoolMinor: 2500,
+          rolloverInMinor: 0,
+          winnersCount: 0,
+          prizePerWinnerMinor: 0,
+          remainderMinor: 0,
+          rolloverOutMinor: 2500,
+        },
+      ];
+      adminDrawsStore.set(id as string, draw);
+      return json(200, { draw: drawDetail(draw) });
+    }
+    if (path === `/api/admin/draws/${id}/publish` && method === 'POST') {
+      if (draw.status !== 'simulated') {
+        return error(422, 'draw_not_simulated', 'Simulate this draw before publishing it.');
+      }
+      draw.status = 'published';
+      adminDrawsStore.set(id as string, draw);
+      return json(200, { draw: drawDetail(draw) });
+    }
+    return error(404, 'not_found', 'x');
+  }
+
+  /** `/api/admin/reports` (PRD §11 ADM-07): live counts composed from the SAME stores above. */
+  function adminReportsRoute(user: ApiUser, token: string, path: string): Response {
+    const allowed = options.adminCheck ? options.adminCheck(token) === 200 : user.role === 'admin';
+    if (!allowed) return error(403, 'forbidden', 'x');
+    if (path !== '/api/admin/reports') return error(404, 'not_found', 'x');
+
+    const totalUsers = adminUserByToken.size;
+    const activeSubscribers = [...adminUserByToken.keys()].filter(
+      (t) => (options.subscriptions?.[t] ?? null)?.status === 'active',
+    ).length;
+    const drawList = [...adminDrawsStore.values()];
+    const draws = {
+      total: drawList.length,
+      draft: drawList.filter((d) => d.status === 'draft').length,
+      simulated: drawList.filter((d) => d.status === 'simulated').length,
+      published: drawList.filter((d) => d.status === 'published').length,
+    };
+    const poolTotals = new Map<string, number>();
+    for (const d of drawList) {
+      if (d.status === 'published' && d.currency && d.prizePoolMinor !== null) {
+        poolTotals.set(d.currency, (poolTotals.get(d.currency) ?? 0) + d.prizePoolMinor);
+      }
+    }
+    const winnersReport = {
+      total: winners.length,
+      awaitingProof: winners.filter((w) => w.verificationStatus === 'awaiting_proof').length,
+      pendingReview: winners.filter((w) => w.verificationStatus === 'pending_review').length,
+      approved: winners.filter((w) => w.verificationStatus === 'approved').length,
+      rejected: winners.filter((w) => w.verificationStatus === 'rejected').length,
+      paid: winners.filter((w) => w.payoutStatus === 'paid').length,
+    };
+
+    return json(200, {
+      reports: {
+        totalUsers,
+        activeSubscribers,
+        draws,
+        prizePoolByCurrency: [...poolTotals].map(([currency, amountMinor]) => ({
+          currency,
+          amountMinor,
+        })),
+        charityContributionsByCurrency: options.charityContributions ?? [],
+        winners: winnersReport,
+        generatedAt: '2027-06-01T00:00:00Z',
+      },
+    });
+  }
+
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -568,6 +1005,14 @@ export function stubApi(
         return Promise.resolve(myWinners(token, path, method, body));
       if (path.startsWith('/api/admin/winners'))
         return Promise.resolve(adminWinners(user, token, path, method, body));
+      if (path.startsWith('/api/admin/users'))
+        return Promise.resolve(adminUsersRoute(user, token, path, method, body));
+      if (path.startsWith('/api/admin/draws'))
+        return Promise.resolve(adminDrawsRoute(user, token, path, method, body));
+      if (path.startsWith('/api/admin/charities'))
+        return Promise.resolve(adminCharities(user, token, path, method, body));
+      if (path === '/api/admin/reports')
+        return Promise.resolve(adminReportsRoute(user, token, path));
       if (path.startsWith('/api/scores'))
         return Promise.resolve(myScores(token, path, method, body));
       if (path === '/api/me/draws') return Promise.resolve(myDraws(token));

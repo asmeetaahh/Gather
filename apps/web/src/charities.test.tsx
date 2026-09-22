@@ -187,17 +187,21 @@ describe('homepage spotlight', () => {
   });
 
   it('shows nothing (and no error) when no charity is featured', async () => {
-    renderApp('/', { api: { charities: [OCEANS] } });
+    const { api } = renderApp('/', { api: { charities: [OCEANS] } });
     expect(await screen.findByRole('heading', { name: 'GATHER' })).toBeTruthy();
-    await waitFor(() => expect(screen.getByText(/API status: online/)).toBeTruthy());
+    await waitFor(() =>
+      expect(api.calls.some((c) => c.path === '/api/charity-spotlight')).toBe(true),
+    );
     expect(screen.queryByRole('heading', { name: 'Charity spotlight' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('does not break the homepage when the spotlight cannot load', async () => {
-    renderApp('/', { api: { charitiesFail: 500 } });
+    const { api } = renderApp('/', { api: { charitiesFail: 500 } });
     expect(await screen.findByRole('heading', { name: 'GATHER' })).toBeTruthy();
-    await waitFor(() => expect(screen.getByText(/API status: online/)).toBeTruthy());
+    await waitFor(() =>
+      expect(api.calls.some((c) => c.path === '/api/charity-spotlight')).toBe(true),
+    );
     expect(screen.queryByRole('heading', { name: 'Charity spotlight' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });

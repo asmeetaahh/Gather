@@ -1,12 +1,17 @@
 import { Router, type Request } from 'express';
 import {
+  isUuid,
   isValidCharitySlug,
   parseCharityListQuery,
+  parseCreateCharityRequest,
   parseUpdateCharityPreference,
+  parseUpdateCharityRequest,
   CHARITY_ERROR_CODES,
+  type AdminCharityResponse,
   type CharityDetailResponse,
   type CharityPreferenceResponse,
   type CharitySpotlightResponse,
+  type ListAdminCharitiesResponse,
   type ListCharitiesResponse,
 } from '@gather/shared';
 import { AppError, ValidationError } from '../errors.js';
@@ -87,5 +92,59 @@ export function createMyContributionsRouter(service: CharityService): Router {
   router.get('/', async (req, res) => {
     res.json(await service.listContributions(callerId(req)));
   });
+  return router;
+}
+
+const notFound = () =>
+  new AppError(404, CHARITY_ERROR_CODES.notFound, 'That charity was not found.');
+
+/**
+ * Charity management — `/api/admin/charities/*` (PRD §11 ADM-05: add, edit, delete/archive). Mounted
+ * behind `requireAuth` + `requireAdmin` in `app.ts`. Unlike the public directory, every route here can
+ * see (and the list/detail routes DO return) archived charities.
+ */
+export function createCharitiesAdminRouter(service: CharityService): Router {
+  const router = Router();
+
+  router.get('/', async (_req, res) => {
+    const body: ListAdminCharitiesResponse = { charities: await service.adminList() };
+    res.json(body);
+  });
+
+  router.post('/', async (req, res) => {
+    const input = parseCreateCharityRequest(req.body);
+    if (!input.ok) throw new ValidationError(input.errors);
+    const body: AdminCharityResponse = { charity: await service.create(input.value) };
+    res.status(201).json(body);
+  });
+
+  router.get('/:id', async (req, res) => {
+    if (!isUuid(req.params.id)) throw notFound();
+    const body: AdminCharityResponse = { charity: await service.adminDetail(req.params.id) };
+    res.json(body);
+  });
+
+  router.patch('/:id', async (req, res) => {
+    if (!isUuid(req.params.id)) throw notFound();
+    const input = parseUpdateCharityRequest(req.body);
+    if (!input.ok) throw new ValidationError(input.errors);
+    const body: AdminCharityResponse = {
+      charity: await service.update(req.params.id, input.value),
+    };
+    res.json(body);
+  });
+
+  router.post('/:id/archive', async (req, res) => {
+    if (!isUuid(req.params.id)) throw notFound();
+    const body: AdminCharityResponse = { charity: await service.archive(req.params.id) };
+    res.json(body);
+  });
+
+  router.post('/:id/unarchive', async (req, res) => {
+    if (!isUuid(req.params.id)) throw notFound();
+    const body: AdminCharityResponse = { charity: await service.unarchive(req.params.id) };
+    res.json(body);
+  });
+
   return router;
 }

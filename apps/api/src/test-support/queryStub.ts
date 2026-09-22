@@ -47,8 +47,15 @@ export class QueryStub implements PromiseLike<StubResult> {
   update(values: unknown) {
     return this.record(`update(${JSON.stringify(values)})`);
   }
+  insert(values: unknown) {
+    return this.record(`insert(${JSON.stringify(values)})`);
+  }
   maybeSingle(): Promise<StubResult> {
     this.calls.push('maybeSingle()');
+    return Promise.resolve(this.result);
+  }
+  single(): Promise<StubResult> {
+    this.calls.push('single()');
     return Promise.resolve(this.result);
   }
   then<A = StubResult, B = never>(

@@ -3,14 +3,17 @@ import {
   CHARITY_ERROR_CODES,
   MIN_CHARITY_BPS,
   checkCharityPercentage,
+  type AdminCharityDto,
   type CharityDetailDto,
   type CharityListQuery,
   type CharityPreferenceDto,
   type CharitySummaryDto,
   type ContributionTotalDto,
+  type CreateCharityRequest,
   type ListCharitiesResponse,
   type ListContributionsResponse,
   type UpdateCharityPreferenceRequest,
+  type UpdateCharityRequest,
 } from '@gather/shared';
 import { AppError } from '../errors.js';
 import type { CharityRepository, StoredPreference } from './repository.js';
@@ -34,6 +37,15 @@ export interface CharityService {
    */
   requireSubscribableCharity(userId: string): Promise<SubscribableCharity>;
   listContributions(userId: string): Promise<ListContributionsResponse>;
+
+  // ---- Admin (PRD §11 ADM-05) -------------------------------------------------------------------
+  /** Every charity, listed or archived (only the admin view includes archived ones). */
+  adminList(): Promise<AdminCharityDto[]>;
+  adminDetail(id: string): Promise<AdminCharityDto>;
+  create(input: CreateCharityRequest): Promise<AdminCharityDto>;
+  update(id: string, patch: UpdateCharityRequest): Promise<AdminCharityDto>;
+  archive(id: string): Promise<AdminCharityDto>;
+  unarchive(id: string): Promise<AdminCharityDto>;
 }
 
 export interface CharityServiceDeps {
@@ -191,6 +203,48 @@ export function createCharityService({
     async listContributions(userId) {
       const contributions = await repository.listContributions(userId);
       return { contributions, totals: totalsByCurrency(contributions) };
+    },
+
+    // ---- Admin (ADM-05) ---------------------------------------------------------------------------
+
+    async adminList() {
+      return repository.adminList(now().toISOString());
+    },
+
+    async adminDetail(id) {
+      const charity = await repository.adminFindById(id, now().toISOString());
+      if (!charity) throw notFound();
+      return charity;
+    },
+
+    async create(input) {
+      const result = await repository.create(input);
+      if (result.kind === 'duplicate_slug') {
+        throw new AppError(
+          409,
+          CHARITY_ERROR_CODES.duplicateSlug,
+          'A charity with that slug already exists.',
+        );
+      }
+      return result.charity;
+    },
+
+    async update(id, patch) {
+      const charity = await repository.update(id, patch, now().toISOString());
+      if (!charity) throw notFound();
+      return charity;
+    },
+
+    async archive(id) {
+      const charity = await repository.setArchived(id, true, now().toISOString());
+      if (!charity) throw notFound();
+      return charity;
+    },
+
+    async unarchive(id) {
+      const charity = await repository.setArchived(id, false, now().toISOString());
+      if (!charity) throw notFound();
+      return charity;
     },
   };
 }

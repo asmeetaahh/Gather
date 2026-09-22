@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  API_ADMIN_CHARITIES_PATH,
   API_CHARITIES_PATH,
   API_CHARITY_SPOTLIGHT_PATH,
   API_MY_CHARITY_PATH,
   API_MY_CONTRIBUTIONS_PATH,
   AUTH_ERROR_CODES,
   CHARITY_ERROR_CODES,
+  type AdminCharityResponse,
   type ApiErrorBody,
   type CharityDetailResponse,
   type CharityPreferenceResponse,
   type CharitySpotlightResponse,
+  type ListAdminCharitiesResponse,
   type ListCharitiesResponse,
   type ListContributionsResponse,
 } from '@gather/shared';
@@ -561,5 +564,143 @@ describe('when things are not configured or break', () => {
       expect(res.text).not.toMatch(/secret detail|relation/);
       expect(errorOf(res).code).toBe('internal_error');
     }
+  });
+});
+
+describe('admin charity management — /api/admin/charities/* (PRD §11 ADM-05)', () => {
+  const UUID = '00000000-0000-4000-8000-000000000000';
+
+  it('every route requires an admin: 401 with no token, 403 for a non-admin, 200/201 for an admin', async () => {
+    const calls: readonly ['get' | 'post', string][] = [
+      ['get', API_ADMIN_CHARITIES_PATH],
+      ['get', `${API_ADMIN_CHARITIES_PATH}/${UUID}`],
+      ['post', `${API_ADMIN_CHARITIES_PATH}/${UUID}/archive`],
+      ['post', `${API_ADMIN_CHARITIES_PATH}/${UUID}/unarchive`],
+    ];
+    for (const [method, path] of calls) {
+      expect((await request(app)[method](path)).status, `${method} ${path} no token`).toBe(401);
+      expect(
+        (await request(app)[method](path).set(bearer(aliceToken))).status,
+        `${method} ${path} non-admin`,
+      ).toBe(403);
+    }
+  });
+
+  it('GET / lists every charity, including the archived one (unlike the public directory)', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app).get(API_ADMIN_CHARITIES_PATH).set(bearer(adminToken));
+    expect(res.status).toBe(200);
+    const names = (res.body as ListAdminCharitiesResponse).charities.map((c) => c.name).sort();
+    expect(names).toEqual(['Clean Oceans', 'Old Friends', 'Riverside Youth Fund']);
+    const old = (res.body as ListAdminCharitiesResponse).charities.find(
+      (c) => c.name === 'Old Friends',
+    );
+    expect(old?.isArchived).toBe(true);
+  });
+
+  it('POST / creates a charity; GET /:id then finds it', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const created = await request(app)
+      .post(API_ADMIN_CHARITIES_PATH)
+      .set(bearer(adminToken))
+      .send({ slug: 'new-charity', name: 'New Charity', description: 'Does good.' });
+    expect(created.status).toBe(201);
+    const id = (created.body as AdminCharityResponse).charity.id;
+
+    const found = await request(app)
+      .get(`${API_ADMIN_CHARITIES_PATH}/${id}`)
+      .set(bearer(adminToken));
+    expect(found.status).toBe(200);
+    expect((found.body as AdminCharityResponse).charity.name).toBe('New Charity');
+  });
+
+  it('POST / rejects an invalid body before touching the repository', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app)
+      .post(API_ADMIN_CHARITIES_PATH)
+      .set(bearer(adminToken))
+      .send({ slug: 'Not Valid!', name: '', description: '' });
+    expect(res.status).toBe(400);
+    expect(
+      errorOf(res)
+        .fieldErrors?.map((e) => e.field)
+        .sort(),
+    ).toEqual(['description', 'name', 'slug']);
+  });
+
+  it('POST / 409s a duplicate slug', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app)
+      .post(API_ADMIN_CHARITIES_PATH)
+      .set(bearer(adminToken))
+      .send({ slug: 'clean-oceans', name: 'Duplicate', description: 'x' });
+    expect(res.status).toBe(409);
+    expect(errorOf(res).code).toBe(CHARITY_ERROR_CODES.duplicateSlug);
+  });
+
+  it('PATCH /:id changes only the given fields', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app)
+      .patch(`${API_ADMIN_CHARITIES_PATH}/${oceans}`)
+      .set(bearer(adminToken))
+      .send({ isFeatured: true });
+    expect(res.status).toBe(200);
+    const charity = (res.body as AdminCharityResponse).charity;
+    expect(charity.isFeatured).toBe(true);
+    expect(charity.name).toBe('Clean Oceans'); // unchanged
+  });
+
+  it('PATCH /:id 404s an unknown charity', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app)
+      .patch(`${API_ADMIN_CHARITIES_PATH}/${UUID}`)
+      .set(bearer(adminToken))
+      .send({ isFeatured: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /:id/archive then /:id/unarchive round-trips visibility in the public directory', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const archived = await request(app)
+      .post(`${API_ADMIN_CHARITIES_PATH}/${riverside}/archive`)
+      .set(bearer(adminToken));
+    expect(archived.status).toBe(200);
+    expect((archived.body as AdminCharityResponse).charity.isArchived).toBe(true);
+
+    const publicListAfterArchive = await request(app).get(API_CHARITIES_PATH);
+    expect(
+      (publicListAfterArchive.body as ListCharitiesResponse).charities.some(
+        (c) => c.id === riverside,
+      ),
+    ).toBe(false);
+
+    const unarchived = await request(app)
+      .post(`${API_ADMIN_CHARITIES_PATH}/${riverside}/unarchive`)
+      .set(bearer(adminToken));
+    expect(unarchived.status).toBe(200);
+    expect((unarchived.body as AdminCharityResponse).charity.isArchived).toBe(false);
+
+    const publicListAfterUnarchive = await request(app).get(API_CHARITIES_PATH);
+    expect(
+      (publicListAfterUnarchive.body as ListCharitiesResponse).charities.some(
+        (c) => c.id === riverside,
+      ),
+    ).toBe(true);
+  });
+
+  it('a malformed id is a 404 and never reaches the repository', async () => {
+    const adminToken = await auth.signToken(ADMIN);
+    const res = await request(app)
+      .get(`${API_ADMIN_CHARITIES_PATH}/not-a-uuid`)
+      .set(bearer(adminToken));
+    expect(res.status).toBe(404);
+  });
+
+  it('→ 503 when the charity service is not wired', async () => {
+    const bare = createApp(config, { auth: auth.deps });
+    const adminToken = await auth.signToken(ADMIN);
+    expect((await request(bare).get(API_ADMIN_CHARITIES_PATH).set(bearer(adminToken))).status).toBe(
+      503,
+    );
   });
 });

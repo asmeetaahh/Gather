@@ -431,3 +431,84 @@ describe('totalsByCurrency', () => {
     ).toThrow(/safe integer/);
   });
 });
+
+describe('admin charity management (PRD §11 ADM-05)', () => {
+  it('adminList includes archived charities, unlike the public directory', async () => {
+    repo.seedCharity({ name: 'Listed One' });
+    const archivedId = repo.seedCharity({ name: 'Archived One' });
+    repo.archive(archivedId);
+
+    const admin = await service.adminList();
+    expect(admin.map((c) => c.name).sort()).toEqual(['Archived One', 'Listed One']);
+    expect(admin.find((c) => c.id === archivedId)?.isArchived).toBe(true);
+
+    const publicList = await service.list({ limit: 20, offset: 0 });
+    expect(publicList.charities.map((c) => c.name)).toEqual(['Listed One']);
+  });
+
+  it('adminDetail 404s an unknown id', async () => {
+    const err = await rejection(service.adminDetail('00000000-0000-4000-8000-000000000000'));
+    expect(err.status).toBe(404);
+    expect(err.code).toBe(CHARITY_ERROR_CODES.notFound);
+  });
+
+  it('adminDetail finds an ARCHIVED charity too (unlike the public detail())', async () => {
+    const id = repo.seedCharity({ name: 'Archived One', slug: 'archived-one' });
+    repo.archive(id);
+    const charity = await service.adminDetail(id);
+    expect(charity).toMatchObject({ name: 'Archived One', isArchived: true });
+    await expect(service.detail('archived-one')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('create() adds a new listed charity', async () => {
+    const charity = await service.create({
+      slug: 'new-charity',
+      name: 'New Charity',
+      description: 'Does good.',
+    });
+    expect(charity).toMatchObject({ slug: 'new-charity', name: 'New Charity', isArchived: false });
+    const found = await service.detail('new-charity');
+    expect(found.name).toBe('New Charity');
+  });
+
+  it('create() reports a duplicate slug as 409, never a generic failure', async () => {
+    repo.seedCharity({ name: 'Existing', slug: 'taken' });
+    const err = await rejection(service.create({ slug: 'taken', name: 'New', description: 'x' }));
+    expect(err.status).toBe(409);
+    expect(err.code).toBe(CHARITY_ERROR_CODES.duplicateSlug);
+  });
+
+  it('update() changes only the given fields', async () => {
+    const id = repo.seedCharity({ name: 'Old Name', description: 'Old.', tags: ['a'] });
+    const updated = await service.update(id, { name: 'New Name' });
+    expect(updated).toMatchObject({ name: 'New Name', description: 'Old.', tags: ['a'] });
+  });
+
+  it('update() 404s an unknown id', async () => {
+    const err = await rejection(
+      service.update('00000000-0000-4000-8000-000000000000', { name: 'x' }),
+    );
+    expect(err.status).toBe(404);
+  });
+
+  it('archive() hides the charity from the public directory but not from admin', async () => {
+    const id = repo.seedCharity({ name: 'To Archive' });
+    const archived = await service.archive(id);
+    expect(archived.isArchived).toBe(true);
+    expect((await service.list({ limit: 20, offset: 0 })).charities).toEqual([]);
+    expect((await service.adminList()).find((c) => c.id === id)?.isArchived).toBe(true);
+  });
+
+  it('unarchive() restores it to the public directory', async () => {
+    const id = repo.seedCharity({ name: 'Restored', archived: true });
+    const restored = await service.unarchive(id);
+    expect(restored.isArchived).toBe(false);
+    expect((await service.list({ limit: 20, offset: 0 })).charities.map((c) => c.id)).toEqual([id]);
+  });
+
+  it('archive() and unarchive() 404 an unknown id', async () => {
+    const id = '00000000-0000-4000-8000-000000000000';
+    expect((await rejection(service.archive(id))).status).toBe(404);
+    expect((await rejection(service.unarchive(id))).status).toBe(404);
+  });
+});

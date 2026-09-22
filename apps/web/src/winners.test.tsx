@@ -104,7 +104,7 @@ describe('WinningsPage — a signed-in winner views and uploads their own proof 
 describe('AdminPage winners queue — approve/reject and mark paid (PRD §11 ADM-06)', () => {
   it('lists winners across every user and lets an admin approve one', async () => {
     renderApp({
-      path: '/admin',
+      path: '/admin/winners',
       session: 'token-admin',
       api: {
         winners: [
@@ -132,7 +132,7 @@ describe('AdminPage winners queue — approve/reject and mark paid (PRD §11 ADM
 
   it('marks an approved winner’s payout paid', async () => {
     renderApp({
-      path: '/admin',
+      path: '/admin/winners',
       session: 'token-admin',
       api: {
         winners: [stubWinner(1, { ownerToken: 'token-alice', verificationStatus: 'approved' })],
@@ -145,7 +145,7 @@ describe('AdminPage winners queue — approve/reject and mark paid (PRD §11 ADM
   });
 
   it('a non-admin never sees the winners queue (the page never gets that far)', async () => {
-    renderApp({ path: '/admin', session: 'token-bob', api: { winners: [] } });
+    renderApp({ path: '/admin/winners', session: 'token-bob', api: { winners: [] } });
     expect((await screen.findByRole('alert')).textContent).toMatch(/do not have permission/);
     expect(screen.queryByRole('heading', { name: 'Winners' })).toBeNull();
   });

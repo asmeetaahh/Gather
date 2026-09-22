@@ -1,14 +1,18 @@
 import type {
+  AdminCharityDto,
   CharityDetailDto,
   CharityListQuery,
   CharitySummaryDto,
   ContributionDto,
+  CreateCharityRequest,
+  UpdateCharityRequest,
 } from '@gather/shared';
 import {
   toDetail,
   toSummary,
   type CharityRepository,
   type CharityRow,
+  type CreateCharityResult,
   type StoredPreference,
   type UpdatePreferenceResult,
 } from '../charities/repository.js';
@@ -230,5 +234,63 @@ export class InMemoryCharities implements CharityRepository {
         b.createdAt.localeCompare(a.createdAt),
       ),
     );
+  }
+
+  // ---- Admin (ADM-05) -----------------------------------------------------------------------------
+  private toAdmin(row: CharityRow & { archived: boolean }, nowIso: string): AdminCharityDto {
+    return { ...toDetail(this.upcoming(row, nowIso), imageUrl), isArchived: row.archived };
+  }
+
+  adminList(nowIso: string): Promise<AdminCharityDto[]> {
+    this.guard();
+    return Promise.resolve(
+      [...this.charities]
+        .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+        .map((c) => this.toAdmin(c, nowIso)),
+    );
+  }
+
+  adminFindById(id: string, nowIso: string): Promise<AdminCharityDto | null> {
+    this.guard();
+    const c = this.charities.find((x) => x.id === id);
+    return Promise.resolve(c ? this.toAdmin(c, nowIso) : null);
+  }
+
+  create(input: CreateCharityRequest): Promise<CreateCharityResult> {
+    this.guard();
+    if (this.charities.some((c) => c.slug === input.slug)) {
+      return Promise.resolve({ kind: 'duplicate_slug' });
+    }
+    const id = this.seedCharity({
+      slug: input.slug,
+      name: input.name,
+      description: input.description,
+      ...(input.tags !== undefined && { tags: input.tags }),
+    });
+    const c = this.charities.find((x) => x.id === id);
+    if (!c) throw new Error('unreachable');
+    return Promise.resolve({
+      kind: 'created',
+      charity: this.toAdmin(c, new Date(0).toISOString()),
+    });
+  }
+
+  update(id: string, patch: UpdateCharityRequest, nowIso: string): Promise<AdminCharityDto | null> {
+    this.guard();
+    const c = this.charities.find((x) => x.id === id);
+    if (!c) return Promise.resolve(null);
+    if (patch.name !== undefined) c.name = patch.name;
+    if (patch.description !== undefined) c.description = patch.description;
+    if (patch.tags !== undefined) c.tags = patch.tags;
+    if (patch.isFeatured !== undefined) c.isFeatured = patch.isFeatured;
+    return Promise.resolve(this.toAdmin(c, nowIso));
+  }
+
+  setArchived(id: string, archived: boolean, nowIso: string): Promise<AdminCharityDto | null> {
+    this.guard();
+    const c = this.charities.find((x) => x.id === id);
+    if (!c) return Promise.resolve(null);
+    c.archived = archived;
+    return Promise.resolve(this.toAdmin(c, nowIso));
   }
 }

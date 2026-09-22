@@ -3,7 +3,10 @@ import express, { type Express, type RequestHandler } from 'express';
 import helmet from 'helmet';
 import {
   API_ADMIN_BASE_PATH,
+  API_ADMIN_CHARITIES_PATH,
   API_ADMIN_DRAWS_PATH,
+  API_ADMIN_REPORTS_PATH,
+  API_ADMIN_USERS_PATH,
   API_ADMIN_WINNERS_PATH,
   API_CHARITIES_PATH,
   API_CHARITY_SPOTLIGHT_PATH,
@@ -18,9 +21,14 @@ import {
   API_SCORES_PATH,
   API_STRIPE_WEBHOOK_PATH,
 } from '@gather/shared';
+import type { AdminUserService } from './admin/users/service.js';
+import type { AdminReportsService } from './admin/reports/service.js';
+import { createUsersAdminRouter } from './admin/users/routes.js';
+import { createReportsAdminRouter } from './admin/reports/routes.js';
 import { requireAdmin, requireAuth, type AuthDeps } from './auth/middleware.js';
 import type { ApiConfig } from './config.js';
 import {
+  createCharitiesAdminRouter,
   createMyCharityRouter,
   createMyContributionsRouter,
   createPublicCharitiesRouter,
@@ -61,6 +69,10 @@ export interface AppDeps {
   draws?: DrawService;
   /** Winner verification and payout tracking (PRD §09/§11). When absent, those endpoints answer 503. */
   winners?: WinnerService;
+  /** Admin user management (PRD §11 ADM-01). When absent, the admin user endpoints answer 503. */
+  adminUsers?: AdminUserService;
+  /** Admin reports (PRD §11 ADM-07). When absent, the reports endpoint answers 503. */
+  adminReports?: AdminReportsService;
 }
 
 /** Stand-in for a feature whose dependencies were not supplied: refuse rather than guess. */
@@ -159,6 +171,28 @@ export function createApp(config: ApiConfig, deps: AppDeps = {}): Express {
     requireAuth(deps.auth),
     requireAdmin,
     deps.winners ? createWinnersAdminRouter(deps.winners) : unavailable,
+  );
+  app.use(
+    API_ADMIN_CHARITIES_PATH,
+    requireAuth(deps.auth),
+    requireAdmin,
+    deps.charities ? createCharitiesAdminRouter(deps.charities) : unavailable,
+  );
+  // Score edits reuse the SAME ScoreService as the user's own /api/scores router above — same rules,
+  // just addressed at :id instead of the caller's own id.
+  app.use(
+    API_ADMIN_USERS_PATH,
+    requireAuth(deps.auth),
+    requireAdmin,
+    deps.adminUsers && deps.scores
+      ? createUsersAdminRouter(deps.adminUsers, deps.scores)
+      : unavailable,
+  );
+  app.use(
+    API_ADMIN_REPORTS_PATH,
+    requireAuth(deps.auth),
+    requireAdmin,
+    deps.adminReports ? createReportsAdminRouter(deps.adminReports) : unavailable,
   );
   app.use(API_ADMIN_BASE_PATH, requireAuth(deps.auth), requireAdmin, adminRouter);
 

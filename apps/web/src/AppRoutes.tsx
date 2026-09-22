@@ -1,6 +1,12 @@
 import { Route, Routes } from 'react-router-dom';
 import { GuestOnly, RequireAdmin, RequireAuth } from './auth/guards';
 import { AdminPage } from './pages/AdminPage';
+import { AdminCharitiesPage } from './pages/admin/AdminCharitiesPage';
+import { AdminDrawsPage } from './pages/admin/AdminDrawsPage';
+import { AdminReportsPage } from './pages/admin/AdminReportsPage';
+import { AdminUserDetailPage } from './pages/admin/AdminUserDetailPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminWinnersPage } from './pages/admin/AdminWinnersPage';
 import { CharitiesPage } from './pages/CharitiesPage';
 import { CharityDetailPage } from './pages/CharityDetailPage';
 import { CharityPreferencePage } from './pages/CharityPreferencePage';
@@ -33,7 +39,14 @@ export function AppRoutes() {
           <Route path="account/subscription" element={<SubscriptionPage />} />
           <Route path="account/winnings" element={<WinningsPage />} />
           <Route element={<RequireAdmin />}>
-            <Route path="admin" element={<AdminPage />} />
+            <Route path="admin" element={<AdminPage />}>
+              <Route index element={<AdminReportsPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="users/:id" element={<AdminUserDetailPage />} />
+              <Route path="draws" element={<AdminDrawsPage />} />
+              <Route path="charities" element={<AdminCharitiesPage />} />
+              <Route path="winners" element={<AdminWinnersPage />} />
+            </Route>
           </Route>
         </Route>
 

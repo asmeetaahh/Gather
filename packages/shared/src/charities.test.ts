@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  API_ADMIN_CHARITIES_PATH,
   CHARITY_ERROR_CODES,
   CHARITY_LIST_DEFAULT_LIMIT,
   SIGNUP_CHARITY_METADATA_KEY,
@@ -8,8 +9,10 @@ import {
   isUuid,
   isValidCharitySlug,
   parseCharityListQuery,
+  parseCreateCharityRequest,
   parseDonationRequest,
   parseUpdateCharityPreference,
+  parseUpdateCharityRequest,
   percentToBps,
 } from './charities.js';
 
@@ -291,6 +294,140 @@ describe('signup charity contract (CHR-01, D-065)', () => {
   it('has distinct, stable codes for "no charity selected" and "selected charity archived"', () => {
     expect(CHARITY_ERROR_CODES.selectionRequired).toBe('charity_required');
     expect(CHARITY_ERROR_CODES.selectedUnavailable).toBe('selected_charity_unavailable');
+    const codes = Object.values(CHARITY_ERROR_CODES);
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+});
+
+describe('admin charity management (PRD §11 ADM-05)', () => {
+  it('API_ADMIN_CHARITIES_PATH is under the admin prefix', () => {
+    expect(API_ADMIN_CHARITIES_PATH).toBe('/api/admin/charities');
+  });
+
+  describe('parseCreateCharityRequest', () => {
+    it('accepts a minimal valid request', () => {
+      expect(
+        parseCreateCharityRequest({
+          slug: 'riverside-youth',
+          name: 'Riverside Youth Fund',
+          description: 'Supports young golfers.',
+        }),
+      ).toEqual({
+        ok: true,
+        value: {
+          slug: 'riverside-youth',
+          name: 'Riverside Youth Fund',
+          description: 'Supports young golfers.',
+        },
+      });
+    });
+
+    it('accepts optional tags and trims name/description', () => {
+      const result = parseCreateCharityRequest({
+        slug: 'x',
+        name: '  Ocean Trust  ',
+        description: '  Clean water.  ',
+        tags: ['youth', 'ocean'],
+      });
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          slug: 'x',
+          name: 'Ocean Trust',
+          description: 'Clean water.',
+          tags: ['youth', 'ocean'],
+        },
+      });
+    });
+
+    it('ignores unknown fields such as id or archivedAt', () => {
+      const result = parseCreateCharityRequest({
+        slug: 'x',
+        name: 'Ocean Trust',
+        description: 'Clean water.',
+        id: 'x',
+        archivedAt: '2020-01-01',
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).not.toHaveProperty('id');
+        expect(result.value).not.toHaveProperty('archivedAt');
+      }
+    });
+
+    it.each([
+      ['missing slug', { name: 'x', description: 'x' }],
+      ['invalid slug', { slug: 'Not Valid!', name: 'x', description: 'x' }],
+      ['missing name', { slug: 'x', description: 'x' }],
+      ['empty name', { slug: 'x', name: '  ', description: 'x' }],
+      ['missing description', { slug: 'x', name: 'x' }],
+      ['empty description', { slug: 'x', name: 'x', description: '  ' }],
+      ['non-array tags', { slug: 'x', name: 'x', description: 'x', tags: 'youth' }],
+      ['a non-string tag', { slug: 'x', name: 'x', description: 'x', tags: [1] }],
+    ])('rejects %s', (_label, body) => {
+      const result = parseCreateCharityRequest(body);
+      expect(result.ok).toBe(false);
+    });
+
+    it.each([null, undefined, 'x', 5, [], true])('rejects a non-object body %j', (body) => {
+      const result = parseCreateCharityRequest(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok)
+        expect(result.errors).toEqual([{ field: 'body', message: 'A JSON object is required.' }]);
+    });
+  });
+
+  describe('parseUpdateCharityRequest', () => {
+    it('accepts a single field', () => {
+      expect(parseUpdateCharityRequest({ isFeatured: true })).toEqual({
+        ok: true,
+        value: { isFeatured: true },
+      });
+    });
+
+    it('accepts every field at once, trimming name/description', () => {
+      const result = parseUpdateCharityRequest({
+        name: '  New Name  ',
+        description: '  New description.  ',
+        tags: ['a'],
+        isFeatured: false,
+      });
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          name: 'New Name',
+          description: 'New description.',
+          tags: ['a'],
+          isFeatured: false,
+        },
+      });
+    });
+
+    it('rejects an empty body (nothing to change)', () => {
+      const result = parseUpdateCharityRequest({});
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors[0]?.field).toBe('body');
+    });
+
+    it.each([
+      ['empty name', { name: '  ' }],
+      ['empty description', { description: '' }],
+      ['non-boolean isFeatured', { isFeatured: 'yes' }],
+      ['non-array tags', { tags: 'x' }],
+    ])('rejects %s', (_label, body) => {
+      expect(parseUpdateCharityRequest(body).ok).toBe(false);
+    });
+
+    it.each([null, undefined, 'x', 5, [], true])('rejects a non-object body %j', (body) => {
+      const result = parseUpdateCharityRequest(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok)
+        expect(result.errors).toEqual([{ field: 'body', message: 'A JSON object is required.' }]);
+    });
+  });
+
+  it('the duplicate-slug error code is stable and distinct from the others', () => {
+    expect(CHARITY_ERROR_CODES.duplicateSlug).toBe('charity_slug_exists');
     const codes = Object.values(CHARITY_ERROR_CODES);
     expect(new Set(codes).size).toBe(codes.length);
   });

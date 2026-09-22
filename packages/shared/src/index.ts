@@ -1,5 +1,6 @@
 // Public surface of @gather/shared. Keep this package free of runtime dependencies and
 // free of anything app-specific (no Express, no React, no Supabase clients).
+export * from './admin.js';
 export * from './auth.js';
 export * from './charities.js';
 export * from './domain.js';

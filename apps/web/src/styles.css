@@ -1,6 +1,7 @@
-/* Shared styles for every page. Not the full "Feel, not fairway" design system (UX-01..06, still a
-   later phase) — clean, responsive and accessible typography/spacing/cards for the functional UI
-   built so far, so it reads as one coherent product rather than unstyled HTML. */
+/* Shared styles for every page: clean, responsive and accessible typography/spacing/cards, so the
+   product reads as one coherent whole rather than unstyled HTML. The homepage (below) gets the one
+   deliberate pass of "feel, not fairway" marketing polish this phase calls for (UX-01/04/06); the rest
+   of the app keeps the same functional styling it already had. */
 :root {
   --gap: 1rem;
   --gap-lg: 1.5rem;
@@ -185,4 +186,207 @@ ul[aria-label] li {
 
 [role='status'] {
   color: var(--muted);
+}
+
+/* Admin dashboard (PRD §11): a simple section nav plus small helpers reused across every admin page. */
+.admin-nav {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap-lg);
+}
+
+.admin-nav a {
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.admin-nav a.active {
+  background: var(--bg-subtle);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+}
+
+/* ---- Homepage (PRD §12 UX-01/UX-04/UX-06): the one page that gets deliberate marketing polish
+   in this phase — "feel, not fairway": charitable impact leads, no fairway/plaid/club imagery. ---- */
+
+.hero {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  margin: 0 0 var(--gap-lg);
+  border-radius: calc(var(--radius) * 2);
+  background: linear-gradient(160deg, var(--accent) 0%, var(--bg-subtle) 130%);
+}
+
+.hero .eyebrow {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #eafff8;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+.hero-tagline {
+  max-width: 36rem;
+  margin: 1rem auto 0;
+  font-size: 1.15rem;
+  color: #f2fbf8;
+}
+
+.hero-cta {
+  display: flex;
+  gap: var(--gap);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--gap-lg);
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: #ffffff;
+  color: var(--accent);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: #eafff8;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.loop-steps {
+  list-style: none;
+  margin: var(--gap-lg) 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--gap-lg);
+  counter-reset: loop-step;
+}
+
+.loop-steps li {
+  counter-increment: loop-step;
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  position: relative;
+}
+
+.loop-steps li::before {
+  content: counter(loop-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.loop-steps h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.loop-steps p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.prize-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--gap-lg);
+  margin: var(--gap) 0 var(--gap-lg);
+}
+
+.prize-tiers article {
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.prize-tiers h3 {
+  margin-top: 0;
+}
+
+.charity-impact {
+  padding: var(--gap-lg);
+  margin: var(--gap-lg) 0;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.final-cta {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  margin: var(--gap-lg) 0 0;
+  border-radius: calc(var(--radius) * 2);
+  border: 1px solid var(--border);
+}
+
+.final-cta .btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  margin-top: var(--gap);
+}
+
+.final-cta .btn-primary:hover,
+.final-cta .btn-primary:focus-visible {
+  background: #185a4a;
+}
+
+@media (max-width: 30rem) {
+  .hero {
+    padding: 2.25rem 1rem;
+  }
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border);
 }

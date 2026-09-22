@@ -1,13 +1,18 @@
 import {
+  API_ADMIN_CHARITIES_PATH,
   API_CHARITIES_PATH,
   API_CHARITY_SPOTLIGHT_PATH,
   API_MY_CHARITY_PATH,
+  type AdminCharityResponse,
   type CharityDetailResponse,
   type CharityListQuery,
   type CharityPreferenceResponse,
   type CharitySpotlightResponse,
+  type CreateCharityRequest,
+  type ListAdminCharitiesResponse,
   type ListCharitiesResponse,
   type UpdateCharityPreferenceRequest,
+  type UpdateCharityRequest,
 } from '@gather/shared';
 import { apiRequest } from './client';
 
@@ -48,4 +53,42 @@ export const updateMyCharity = (accessToken: string, body: UpdateCharityPreferen
     method: 'PATCH',
     accessToken,
     body,
+  });
+
+// ---- Admin charity management (PRD §11 ADM-05) ---------------------------------------------------
+// The directory/profile/spotlight above show only LISTED charities. These are the only way to
+// create, edit or archive one; archived charities are only ever visible through these endpoints.
+
+/** `GET /api/admin/charities` — every charity, including archived ones. */
+export const fetchAdminCharities = (accessToken: string) =>
+  apiRequest<ListAdminCharitiesResponse>(API_ADMIN_CHARITIES_PATH, { accessToken });
+
+export const fetchAdminCharity = (accessToken: string, id: string) =>
+  apiRequest<AdminCharityResponse>(`${API_ADMIN_CHARITIES_PATH}/${id}`, { accessToken });
+
+export const createCharity = (accessToken: string, body: CreateCharityRequest) =>
+  apiRequest<AdminCharityResponse>(API_ADMIN_CHARITIES_PATH, {
+    method: 'POST',
+    accessToken,
+    body,
+  });
+
+export const updateCharity = (accessToken: string, id: string, body: UpdateCharityRequest) =>
+  apiRequest<AdminCharityResponse>(`${API_ADMIN_CHARITIES_PATH}/${id}`, {
+    method: 'PATCH',
+    accessToken,
+    body,
+  });
+
+/** Archiving hides a charity from the public directory/spotlight/signup; it never deletes it. */
+export const archiveCharity = (accessToken: string, id: string) =>
+  apiRequest<AdminCharityResponse>(`${API_ADMIN_CHARITIES_PATH}/${id}/archive`, {
+    method: 'POST',
+    accessToken,
+  });
+
+export const unarchiveCharity = (accessToken: string, id: string) =>
+  apiRequest<AdminCharityResponse>(`${API_ADMIN_CHARITIES_PATH}/${id}/unarchive`, {
+    method: 'POST',
+    accessToken,
   });

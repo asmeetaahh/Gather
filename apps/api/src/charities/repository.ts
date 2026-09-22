@@ -1,11 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
+  AdminCharityDto,
   CharityDetailDto,
   CharityEventDto,
   CharityImageDto,
   CharityListQuery,
   CharitySummaryDto,
   ContributionDto,
+  CreateCharityRequest,
+  UpdateCharityRequest,
 } from '@gather/shared';
 import { summarize, toPrefixTsQuery } from './text.js';
 
@@ -48,7 +51,23 @@ export interface CharityRepository {
   getMaxBps(): Promise<number | null>;
   /** The user's own contributions, newest first. */
   listContributions(userId: string): Promise<ContributionDto[]>;
+
+  // ---- Admin (PRD §11 ADM-05: add, edit, delete/archive charities; D-065 notes this was not built
+  // until the admin phase). Every method here sees ALL charities, including archived ones — the
+  // public/listed-only filter above is deliberately NOT applied.
+  /** Every charity, listed or archived, by name. */
+  adminList(nowIso: string): Promise<AdminCharityDto[]>;
+  /** A single charity by id, listed or archived, or `null` if no such charity exists at all. */
+  adminFindById(id: string, nowIso: string): Promise<AdminCharityDto | null>;
+  create(input: CreateCharityRequest): Promise<CreateCharityResult>;
+  /** `null` if no such charity exists. */
+  update(id: string, patch: UpdateCharityRequest, nowIso: string): Promise<AdminCharityDto | null>;
+  /** `null` if no such charity exists. Safe to call repeatedly: the charity ends up archived/listed either way. */
+  setArchived(id: string, archived: boolean, nowIso: string): Promise<AdminCharityDto | null>;
 }
+
+export type CreateCharityResult =
+  { kind: 'created'; charity: AdminCharityDto } | { kind: 'duplicate_slug' };
 
 // ---- Row parsing (the trust boundary with PostgREST) ---------------------------------------------
 
@@ -80,6 +99,8 @@ export interface CharityRow {
   isFeatured: boolean;
   images: ImageRow[];
   events: CharityEventDto[];
+  /** `undefined` when the query never selected the column (every public query); `null`/a string for admin queries. */
+  archivedAt?: string | null;
 }
 
 function parseImage(row: unknown): ImageRow {
@@ -121,6 +142,9 @@ export function parseCharityRow(row: unknown): CharityRow {
     isFeatured: row.is_featured,
     images: arr(row.charity_images ?? [], 'charity images').map(parseImage),
     events: arr(row.charity_events ?? [], 'charity events').map(parseEvent),
+    ...(row.archived_at !== undefined && {
+      archivedAt: row.archived_at === null ? null : str(row.archived_at, 'charity row'),
+    }),
   };
 }
 
@@ -163,6 +187,13 @@ export function toDetail(row: CharityRow, url: ImageUrl): CharityDetailDto {
     images: [...row.images].sort(byPosition).map((image) => toImage(image, url)),
     upcomingEvents: [...row.events].sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
   };
+}
+
+/** Admin view: the same profile shape, plus whether the charity is archived (ADM-05). */
+export function toAdminDetail(row: CharityRow, url: ImageUrl): AdminCharityDto {
+  if (row.archivedAt === undefined)
+    throw new Error('Malformed charity row: archived_at not selected');
+  return { ...toDetail(row, url), isArchived: row.archivedAt !== null };
 }
 
 function parsePreference(row: unknown): StoredPreference {
@@ -219,6 +250,9 @@ const DETAIL_SELECT =
 const PREFERENCE_SELECT = 'charity_bps, charities!selected_charity_id(id, slug, name, archived_at)';
 const MAX_EVENTS = 20;
 const MAX_CONTRIBUTIONS = 100;
+// Admin views additionally select archived_at (D-065: only the admin ever sees archived charities).
+const ADMIN_DETAIL_SELECT = `${DETAIL_SELECT}, archived_at`;
+const DUPLICATE_SLUG = '23505';
 
 /** Supabase-backed repository, using the service-role client (server-side only). */
 export function createSupabaseCharityRepository(client: SupabaseClient): CharityRepository {
@@ -338,6 +372,89 @@ export function createSupabaseCharityRepository(client: SupabaseClient): Charity
         .limit(MAX_CONTRIBUTIONS);
       if (error) throw new Error(`Contribution lookup failed: ${error.message}`);
       return (data as unknown[]).map(parseContribution);
+    },
+
+    // ---- Admin (ADM-05) ---------------------------------------------------------------------------
+
+    async adminList(nowIso) {
+      // No `.is('archived_at', null)` filter here — deliberately, this is the ONE place archived
+      // charities are meant to be visible (D-065: "administrators can also see archived charities").
+      const { data, error } = await client
+        .from('charities')
+        .select(ADMIN_DETAIL_SELECT)
+        .gte('charity_events.starts_at', nowIso)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .order('starts_at', { referencedTable: 'charity_events', ascending: true })
+        .order('sort_order', { referencedTable: 'charity_images', ascending: true });
+      if (error) throw new Error(`Admin charity list failed: ${error.message}`);
+      return (data as unknown[]).map((row) => toAdminDetail(parseCharityRow(row), url));
+    },
+
+    async adminFindById(id, nowIso) {
+      const { data, error } = await client
+        .from('charities')
+        .select(ADMIN_DETAIL_SELECT)
+        .eq('id', id)
+        .gte('charity_events.starts_at', nowIso)
+        .order('starts_at', { referencedTable: 'charity_events', ascending: true })
+        .limit(MAX_EVENTS, { referencedTable: 'charity_events' })
+        .order('sort_order', { referencedTable: 'charity_images', ascending: true })
+        .maybeSingle();
+      if (error) throw new Error(`Admin charity lookup failed: ${error.message}`);
+      return data === null ? null : toAdminDetail(parseCharityRow(data), url);
+    },
+
+    async create(input) {
+      const { data, error } = await client
+        .from('charities')
+        .insert({
+          slug: input.slug,
+          name: input.name,
+          description: input.description,
+          ...(input.tags !== undefined && { tags: input.tags }),
+        })
+        .select(ADMIN_DETAIL_SELECT)
+        .single();
+      if (error) {
+        if (error.code === DUPLICATE_SLUG) return { kind: 'duplicate_slug' };
+        throw new Error(`Charity creation failed: ${error.message}`);
+      }
+      return { kind: 'created', charity: toAdminDetail(parseCharityRow(data), url) };
+    },
+
+    async update(id, patch, nowIso) {
+      const changes = {
+        ...(patch.name !== undefined && { name: patch.name }),
+        ...(patch.description !== undefined && { description: patch.description }),
+        ...(patch.tags !== undefined && { tags: patch.tags }),
+        ...(patch.isFeatured !== undefined && { is_featured: patch.isFeatured }),
+      };
+      const { data, error } = await client
+        .from('charities')
+        .update(changes)
+        .eq('id', id)
+        .select(ADMIN_DETAIL_SELECT)
+        .gte('charity_events.starts_at', nowIso)
+        .order('starts_at', { referencedTable: 'charity_events', ascending: true })
+        .order('sort_order', { referencedTable: 'charity_images', ascending: true })
+        .maybeSingle();
+      if (error) throw new Error(`Charity update failed: ${error.message}`);
+      return data === null ? null : toAdminDetail(parseCharityRow(data), url);
+    },
+
+    async setArchived(id, archived, nowIso) {
+      const { data, error } = await client
+        .from('charities')
+        .update({ archived_at: archived ? new Date().toISOString() : null })
+        .eq('id', id)
+        .select(ADMIN_DETAIL_SELECT)
+        .gte('charity_events.starts_at', nowIso)
+        .order('starts_at', { referencedTable: 'charity_events', ascending: true })
+        .order('sort_order', { referencedTable: 'charity_images', ascending: true })
+        .maybeSingle();
+      if (error) throw new Error(`Charity archive update failed: ${error.message}`);
+      return data === null ? null : toAdminDetail(parseCharityRow(data), url);
     },
   };
 }

@@ -473,3 +473,135 @@ describe('listContributions (CHR-04: independent donations are contributions too
     ).rejects.toThrow(/Contribution lookup failed/);
   });
 });
+
+describe('admin charity management (PRD §11 ADM-05)', () => {
+  const ADMIN_ROW = { ...ROW, archived_at: null };
+  const ARCHIVED_ROW = { ...ROW, archived_at: '2026-01-01T00:00:00.000Z' };
+
+  describe('adminList', () => {
+    it('selects archived_at and applies NO listed-only filter', async () => {
+      const { client, seen } = stubClient({ data: [ADMIN_ROW], error: null });
+      const result = await createSupabaseCharityRepository(client).adminList(NOW);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: 'c1', isArchived: false });
+      expect(seen.query?.calls[0]).toContain('archived_at');
+      expect(seen.query?.calls).not.toContain('is(archived_at=null)');
+    });
+
+    it('marks an archived charity isArchived: true', async () => {
+      const { client } = stubClient({ data: [ARCHIVED_ROW], error: null });
+      const [charity] = await createSupabaseCharityRepository(client).adminList(NOW);
+      expect(charity?.isArchived).toBe(true);
+    });
+
+    it('throws on a query error', async () => {
+      await expect(
+        createSupabaseCharityRepository(
+          stubClient({ data: null, error: { message: 'x' } }).client,
+        ).adminList(NOW),
+      ).rejects.toThrow(/Admin charity list failed/);
+    });
+  });
+
+  describe('adminFindById', () => {
+    it('finds an archived charity by id (the public repository never would)', async () => {
+      const { client, seen } = stubClient({ data: ARCHIVED_ROW, error: null });
+      const charity = await createSupabaseCharityRepository(client).adminFindById('c1', NOW);
+      expect(charity?.isArchived).toBe(true);
+      expect(seen.query?.calls).toContain('eq(id=c1)');
+      expect(seen.query?.calls).not.toContain('is(archived_at=null)');
+    });
+
+    it('returns null when no such charity exists at all', async () => {
+      const { client } = stubClient({ data: null, error: null });
+      expect(await createSupabaseCharityRepository(client).adminFindById('x', NOW)).toBeNull();
+    });
+  });
+
+  describe('create', () => {
+    it('inserts the given fields and returns the admin DTO', async () => {
+      const { client, seen } = stubClient({ data: ADMIN_ROW, error: null });
+      const result = await createSupabaseCharityRepository(client).create({
+        slug: 'riverside',
+        name: 'Riverside Youth Fund',
+        description: 'Coaching for young people.',
+        tags: ['youth'],
+      });
+      expect(result).toEqual({
+        kind: 'created',
+        charity: expect.objectContaining({ id: 'c1' }) as unknown,
+      });
+      expect(seen.query?.calls[0]).toBe(
+        'insert({"slug":"riverside","name":"Riverside Youth Fund","description":"Coaching for young people.","tags":["youth"]})',
+      );
+      expect(seen.query?.calls).toContain('single()');
+    });
+
+    it('maps a unique-slug violation to duplicate_slug', async () => {
+      const { client } = stubClient({ data: null, error: { code: '23505', message: 'x' } });
+      expect(
+        await createSupabaseCharityRepository(client).create({
+          slug: 'taken',
+          name: 'x',
+          description: 'x',
+        }),
+      ).toEqual({ kind: 'duplicate_slug' });
+    });
+
+    it('any other error is a plain failure', async () => {
+      await expect(
+        createSupabaseCharityRepository(
+          stubClient({ data: null, error: { message: 'x' } }).client,
+        ).create({
+          slug: 'x',
+          name: 'x',
+          description: 'x',
+        }),
+      ).rejects.toThrow(/Charity creation failed/);
+    });
+  });
+
+  describe('update', () => {
+    it('sends only the changed columns', async () => {
+      const { client, seen } = stubClient({ data: ADMIN_ROW, error: null });
+      await createSupabaseCharityRepository(client).update('c1', { name: 'New Name' }, NOW);
+      expect(seen.query?.calls[0]).toBe('update({"name":"New Name"})');
+      expect(seen.query?.calls).toContain('eq(id=c1)');
+    });
+
+    it('maps isFeatured to is_featured', async () => {
+      const { client, seen } = stubClient({ data: ADMIN_ROW, error: null });
+      await createSupabaseCharityRepository(client).update('c1', { isFeatured: true }, NOW);
+      expect(seen.query?.calls[0]).toBe('update({"is_featured":true})');
+    });
+
+    it('returns null when no such charity exists', async () => {
+      const { client } = stubClient({ data: null, error: null });
+      expect(
+        await createSupabaseCharityRepository(client).update('x', { name: 'x' }, NOW),
+      ).toBeNull();
+    });
+  });
+
+  describe('setArchived', () => {
+    it('archiving sets archived_at to a timestamp', async () => {
+      const { client, seen } = stubClient({ data: ARCHIVED_ROW, error: null });
+      const result = await createSupabaseCharityRepository(client).setArchived('c1', true, NOW);
+      expect(result?.isArchived).toBe(true);
+      const call = seen.query?.calls[0] ?? '';
+      expect(call).toMatch(/^update\(\{"archived_at":"/);
+    });
+
+    it('unarchiving sets archived_at to null', async () => {
+      const { client, seen } = stubClient({ data: ADMIN_ROW, error: null });
+      const result = await createSupabaseCharityRepository(client).setArchived('c1', false, NOW);
+      expect(result?.isArchived).toBe(false);
+      expect(seen.query?.calls[0]).toBe('update({"archived_at":null})');
+    });
+
+    it('returns null when no such charity exists', async () => {
+      const { client } = stubClient({ data: null, error: null });
+      expect(await createSupabaseCharityRepository(client).setArchived('x', true, NOW)).toBeNull();
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import { API_ADMIN_BASE_PATH } from './auth.js';
 import { BPS_DENOMINATOR, MIN_CHARITY_BPS } from './domain.js';
 import type { PaymentKind } from './enums.js';
 import type { FieldError } from './errors.js';
@@ -13,6 +14,8 @@ export const API_CHARITY_SPOTLIGHT_PATH = '/api/charity-spotlight' as const;
 export const API_MY_CHARITY_PATH = '/api/me/charity' as const;
 /** The signed-in user's own charity contributions (read-only). */
 export const API_MY_CONTRIBUTIONS_PATH = '/api/me/contributions' as const;
+/** Admin charity management (PRD §11 ADM-05: add, edit, delete/archive charities). */
+export const API_ADMIN_CHARITIES_PATH = `${API_ADMIN_BASE_PATH}/charities` as const;
 
 // ---- Public content ------------------------------------------------------------------------------
 
@@ -153,6 +156,8 @@ export const CHARITY_ERROR_CODES = {
   selectionRequired: 'charity_required',
   /** The user's selected charity was archived: they must choose another before subscribing (D-065). HTTP 422. */
   selectedUnavailable: 'selected_charity_unavailable',
+  /** Admin create: a charity with that slug already exists. HTTP 409. */
+  duplicateSlug: 'charity_slug_exists',
 } as const;
 
 /**
@@ -371,6 +376,141 @@ export function parseUpdateCharityPreference(
   }
   if (errors.length === 0 && value.charityId === undefined && value.percentageBps === undefined) {
     errors.push({ field: 'body', message: 'Provide charityId and/or percentageBps.' });
+  }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, value };
+}
+
+// ---- Admin charity management (PRD §11 ADM-05) ----------------------------------------------------
+// Nothing here changes what the public directory shows: the public repository still returns only
+// listed (non-archived) charities. These endpoints are the only way to create, edit or archive one.
+
+/** The admin's view of a charity: everything the public profile has, plus whether it is archived. */
+export interface AdminCharityDto extends CharityDetailDto {
+  isArchived: boolean;
+}
+
+export interface ListAdminCharitiesResponse {
+  charities: AdminCharityDto[];
+}
+
+export interface AdminCharityResponse {
+  charity: AdminCharityDto;
+}
+
+const MAX_CHARITY_NAME_LENGTH = 200;
+const MAX_TAGS = 20;
+
+function tagsError(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.length > MAX_TAGS) {
+    return `tags must be an array of at most ${String(MAX_TAGS)} strings.`;
+  }
+  for (const tag of value) {
+    if (typeof tag !== 'string' || tag.length === 0 || tag.length > CHARITY_TAG_MAX_LENGTH) {
+      return 'Each tag must be a non-empty string.';
+    }
+  }
+  return null;
+}
+
+/** `POST /api/admin/charities`. */
+export interface CreateCharityRequest {
+  slug: string;
+  name: string;
+  description: string;
+  tags?: string[];
+}
+
+export function parseCreateCharityRequest(body: unknown): Parsed<CreateCharityRequest> {
+  if (!isPlainObject(body)) return bodyError();
+  const errors: FieldError[] = [];
+
+  if (!isValidCharitySlug(body.slug)) {
+    errors.push({
+      field: 'slug',
+      message: 'slug must be lower-case letters, digits and hyphens, at most 200 characters.',
+    });
+  }
+  if (
+    typeof body.name !== 'string' ||
+    body.name.trim().length === 0 ||
+    body.name.length > MAX_CHARITY_NAME_LENGTH
+  ) {
+    errors.push({
+      field: 'name',
+      message: `name must be a non-empty string of at most ${String(MAX_CHARITY_NAME_LENGTH)} characters.`,
+    });
+  }
+  if (typeof body.description !== 'string' || body.description.trim().length === 0) {
+    errors.push({ field: 'description', message: 'description must be a non-empty string.' });
+  }
+  const tagsProblem = tagsError(body.tags);
+  if (tagsProblem) errors.push({ field: 'tags', message: tagsProblem });
+
+  if (errors.length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      slug: body.slug as string,
+      name: (body.name as string).trim(),
+      description: (body.description as string).trim(),
+      ...(body.tags !== undefined && { tags: body.tags as string[] }),
+    },
+  };
+}
+
+/** `PATCH /api/admin/charities/:id`. Every field is optional; send only what changed. */
+export interface UpdateCharityRequest {
+  name?: string;
+  description?: string;
+  tags?: string[];
+  isFeatured?: boolean;
+}
+
+export function parseUpdateCharityRequest(body: unknown): Parsed<UpdateCharityRequest> {
+  if (!isPlainObject(body)) return bodyError();
+  const errors: FieldError[] = [];
+  const value: UpdateCharityRequest = {};
+
+  if (body.name !== undefined) {
+    if (
+      typeof body.name !== 'string' ||
+      body.name.trim().length === 0 ||
+      body.name.length > MAX_CHARITY_NAME_LENGTH
+    ) {
+      errors.push({ field: 'name', message: 'name must be a non-empty string.' });
+    } else {
+      value.name = body.name.trim();
+    }
+  }
+  if (body.description !== undefined) {
+    if (typeof body.description !== 'string' || body.description.trim().length === 0) {
+      errors.push({ field: 'description', message: 'description must be a non-empty string.' });
+    } else {
+      value.description = body.description.trim();
+    }
+  }
+  if (body.tags !== undefined) {
+    const tagsProblem = tagsError(body.tags);
+    if (tagsProblem) errors.push({ field: 'tags', message: tagsProblem });
+    else value.tags = body.tags as string[];
+  }
+  if (body.isFeatured !== undefined) {
+    if (typeof body.isFeatured !== 'boolean') {
+      errors.push({ field: 'isFeatured', message: 'isFeatured must be true or false.' });
+    } else {
+      value.isFeatured = body.isFeatured;
+    }
+  }
+
+  if (
+    errors.length === 0 &&
+    value.name === undefined &&
+    value.description === undefined &&
+    value.tags === undefined &&
+    value.isFeatured === undefined
+  ) {
+    errors.push({ field: 'body', message: 'Provide at least one field to change.' });
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, value };
 }
