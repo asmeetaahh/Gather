@@ -4,6 +4,7 @@ import {
   type DrawDetailDto,
   type DrawSummaryDto,
   type ListDrawsResponse,
+  type ListMyDrawParticipationResponse,
 } from '@gather/shared';
 import { AppError } from '../errors.js';
 import {
@@ -33,6 +34,8 @@ export interface DrawService {
   simulate(id: string): Promise<DrawDetailDto>;
   /** Freezes a simulated draw and creates its winners; idempotent (D-071). */
   publish(id: string, publishedBy: string): Promise<DrawDetailDto>;
+  /** The caller's own participation in PUBLISHED draws, newest first (PRD §10 DSH-04). */
+  listMine(userId: string): Promise<ListMyDrawParticipationResponse>;
 }
 
 export interface DrawServiceDeps {
@@ -144,6 +147,10 @@ export function createDrawService({
 
     async get(id) {
       return toDetailDto(await requireDraw(id));
+    },
+
+    async listMine(userId) {
+      return { draws: await repository.listMyParticipation(userId) };
     },
 
     async create(createdBy, input) {

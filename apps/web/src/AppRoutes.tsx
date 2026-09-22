@@ -1,10 +1,10 @@
 import { Route, Routes } from 'react-router-dom';
 import { GuestOnly, RequireAdmin, RequireAuth } from './auth/guards';
-import { AccountPage } from './pages/AccountPage';
 import { AdminPage } from './pages/AdminPage';
 import { CharitiesPage } from './pages/CharitiesPage';
 import { CharityDetailPage } from './pages/CharityDetailPage';
 import { CharityPreferencePage } from './pages/CharityPreferencePage';
+import { DashboardPage } from './pages/DashboardPage';
 import { HomePage } from './pages/HomePage';
 import { Layout } from './pages/Layout';
 import { LoginPage } from './pages/LoginPage';
@@ -28,7 +28,7 @@ export function AppRoutes() {
         </Route>
 
         <Route element={<RequireAuth />}>
-          <Route path="account" element={<AccountPage />} />
+          <Route path="account" element={<DashboardPage />} />
           <Route path="account/charity" element={<CharityPreferencePage />} />
           <Route path="account/subscription" element={<SubscriptionPage />} />
           <Route path="account/winnings" element={<WinningsPage />} />

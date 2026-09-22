@@ -1,4 +1,4 @@
-import { API_ADMIN_BASE_PATH } from './auth.js';
+import { API_ADMIN_BASE_PATH, API_ME_PATH } from './auth.js';
 import { DRAW_MODES, type DrawMode, type DrawStatus } from './enums.js';
 import type { FieldError } from './errors.js';
 import type { Parsed } from './scores.js';
@@ -7,6 +7,9 @@ import type { Parsed } from './scores.js';
 
 /** Every draw-management endpoint: admin only (PRD §11 ADM-02/03/04). */
 export const API_ADMIN_DRAWS_PATH = `${API_ADMIN_BASE_PATH}/draws` as const;
+
+/** The signed-in user's own draw participation (PRD §10 DSH-04). */
+export const API_MY_DRAWS_PATH = `${API_ME_PATH}/draws` as const;
 
 // ---- Contracts --------------------------------------------------------------------------------
 
@@ -56,6 +59,27 @@ export interface ListDrawsResponse {
 
 export interface DrawResponse {
   draw: DrawDetailDto;
+}
+
+/**
+ * `GET /api/me/draws` — one row per PUBLISHED draw the caller was entered in (PRD §10 DSH-04:
+ * "draws entered"). Draft and simulated draws never appear here, whether or not the caller has a
+ * candidate entry in one — candidate results must never leak (DECISIONS D-050), matching exactly what
+ * the `draw_entries_select_own_published` RLS policy already restricts a direct read to. The winning
+ * numbers are safe to include because the draw is published.
+ */
+export interface MyDrawParticipationDto {
+  drawId: string;
+  /** First day of the calendar month this draw belongs to, `YYYY-MM-DD`. */
+  drawMonth: string;
+  mode: DrawMode;
+  winningNumbers: number[];
+  /** How many of the caller's numbers matched this draw (0-5). */
+  matchCount: number;
+}
+
+export interface ListMyDrawParticipationResponse {
+  draws: MyDrawParticipationDto[];
 }
 
 /** `POST /api/admin/draws` — creates a new draft draw for a month that has none yet. */

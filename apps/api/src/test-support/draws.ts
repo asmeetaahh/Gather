@@ -1,4 +1,9 @@
-import type { DrawMode, DrawStatus, DrawTierResultDto } from '@gather/shared';
+import type {
+  DrawMode,
+  DrawStatus,
+  DrawTierResultDto,
+  MyDrawParticipationDto,
+} from '@gather/shared';
 import type { PaymentBasis } from '../draws/domain.js';
 import {
   DrawStateConflictError,
@@ -278,5 +283,24 @@ export class InMemoryDraws implements DrawRepository {
         };
       });
     return Promise.resolve('published');
+  }
+
+  listMyParticipation(userId: string): Promise<MyDrawParticipationDto[]> {
+    this.guard();
+    const rows = this.draws
+      .filter((d) => d.status === 'published')
+      .flatMap((d) =>
+        d.entries
+          .filter((e) => e.userId === userId)
+          .map((e): MyDrawParticipationDto => ({
+            drawId: d.id,
+            drawMonth: d.drawMonth,
+            mode: d.mode,
+            winningNumbers: d.winningNumbers ?? [],
+            matchCount: e.matchCount,
+          })),
+      )
+      .sort((a, b) => b.drawMonth.localeCompare(a.drawMonth));
+    return Promise.resolve(rows);
   }
 }

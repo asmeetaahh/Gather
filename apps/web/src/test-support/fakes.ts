@@ -6,8 +6,10 @@ import type {
   CharityPreferenceDto,
   CharitySummaryDto,
   MeResponse,
+  MyDrawParticipationDto,
   PayoutStatus,
   PlanDto,
+  ScoreDto,
   SubscriptionDto,
   VerificationStatus,
   WinnerDetailDto,
@@ -226,6 +228,10 @@ export function stubApi(
     billingFail?: number;
     /** Seeded winners, each owned by one access token (see `stubWinner`). */
     winners?: StubWinner[];
+    /** Each user's starting scores, by access token (default: none). Mutated by add/edit/delete. */
+    scores?: Record<string, ScoreDto[]>;
+    /** Each user's published-draw participation, by access token (default: none; read-only). */
+    draws?: Record<string, MyDrawParticipationDto[]>;
   } = {},
 ) {
   const calls: {
@@ -427,6 +433,71 @@ export function stubApi(
     return error(404, 'not_found', 'x');
   }
 
+  // ---- scores (PRD §05; dashboard DSH-02): a simplified replace-oldest, good enough to drive UI
+  // interaction tests. The real rule is proven at the API/database layers, not re-implemented here.
+  const scoresByToken = new Map(
+    Object.entries(options.scores ?? {}).map(([token, list]) => [token, [...list]]),
+  );
+  function myScores(token: string, path: string, method: string, body: unknown): Response {
+    const mine = () => scoresByToken.get(token) ?? [];
+    if (path === '/api/scores' && method === 'GET') {
+      return json(200, {
+        scores: [...mine()].sort((a, b) => b.playedOn.localeCompare(a.playedOn)),
+      });
+    }
+    if (path === '/api/scores' && method === 'POST') {
+      const patch = body as { playedOn?: string; stablefordScore?: number };
+      if (!patch.playedOn || !patch.stablefordScore) return error(400, 'validation_failed', 'x');
+      const list = mine();
+      if (list.some((s) => s.playedOn === patch.playedOn)) {
+        return error(409, 'score_date_exists', 'You already have a score for that date.');
+      }
+      let replacedPlayedOn: string | null = null;
+      let next = list;
+      if (list.length >= 5) {
+        const oldest = [...list].sort((a, b) => a.playedOn.localeCompare(b.playedOn))[0];
+        replacedPlayedOn = oldest?.playedOn ?? null;
+        next = list.filter((s) => s.playedOn !== replacedPlayedOn);
+      }
+      const score: ScoreDto = {
+        id: `score-${String(next.length + 1)}-${patch.playedOn}`,
+        playedOn: patch.playedOn,
+        stablefordScore: patch.stablefordScore,
+        createdAt: '2027-01-01T00:00:00Z',
+        updatedAt: '2027-01-01T00:00:00Z',
+      };
+      scoresByToken.set(token, [...next, score]);
+      return json(201, { score, replacedPlayedOn });
+    }
+    const match = /^\/api\/scores\/([^/]+)$/.exec(path);
+    const playedOn = match?.[1];
+    const existing = mine().find((s) => s.playedOn === playedOn);
+    if (!existing) return error(404, 'score_not_found', 'No score for that date.');
+    if (method === 'PUT') {
+      const patch = body as { stablefordScore?: number };
+      if (!patch.stablefordScore) return error(400, 'validation_failed', 'x');
+      const updated: ScoreDto = { ...existing, stablefordScore: patch.stablefordScore };
+      scoresByToken.set(
+        token,
+        mine().map((s) => (s.playedOn === playedOn ? updated : s)),
+      );
+      return json(200, { score: updated });
+    }
+    if (method === 'DELETE') {
+      scoresByToken.set(
+        token,
+        mine().filter((s) => s.playedOn !== playedOn),
+      );
+      return new Response(null, { status: 204 });
+    }
+    return error(404, 'not_found', 'x');
+  }
+
+  // ---- draw participation (PRD §10 DSH-04): read-only.
+  function myDraws(token: string): Response {
+    return json(200, { draws: options.draws?.[token] ?? [] });
+  }
+
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -497,6 +568,9 @@ export function stubApi(
         return Promise.resolve(myWinners(token, path, method, body));
       if (path.startsWith('/api/admin/winners'))
         return Promise.resolve(adminWinners(user, token, path, method, body));
+      if (path.startsWith('/api/scores'))
+        return Promise.resolve(myScores(token, path, method, body));
+      if (path === '/api/me/draws') return Promise.resolve(myDraws(token));
       return Promise.resolve(json(404, { error: { code: 'not_found', message: 'x' } }));
     }),
   );

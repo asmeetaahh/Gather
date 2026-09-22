@@ -11,6 +11,7 @@ import {
   API_ME_PATH,
   API_MY_CHARITY_PATH,
   API_MY_CONTRIBUTIONS_PATH,
+  API_MY_DRAWS_PATH,
   API_MY_SUBSCRIPTION_PATH,
   API_MY_WINNERS_PATH,
   API_PLANS_PATH,
@@ -33,7 +34,7 @@ import {
 } from './billing/routes.js';
 import type { BillingService } from './billing/service.js';
 import type { StripeWebhookHandler } from './billing/webhooks.js';
-import { createDrawsAdminRouter } from './draws/routes.js';
+import { createDrawsAdminRouter, createMyDrawsRouter } from './draws/routes.js';
 import type { DrawService } from './draws/service.js';
 import { AppError } from './errors.js';
 import { apiNotFound, errorHandler } from './middleware/errors.js';
@@ -126,6 +127,13 @@ export function createApp(config: ApiConfig, deps: AppDeps = {}): Express {
     API_MY_WINNERS_PATH,
     requireAuth(deps.auth),
     deps.winners ? createMyWinnersRouter(deps.winners) : unavailable,
+  );
+  // The signed-in user's own draw participation (PRD §10 DSH-04). Mounted BEFORE the generic /api/me
+  // for the same reason as charity/contributions/winners above.
+  app.use(
+    API_MY_DRAWS_PATH,
+    requireAuth(deps.auth),
+    deps.draws ? createMyDrawsRouter(deps.draws) : unavailable,
   );
 
   // Authenticated: any signed-in account, acting only as itself.

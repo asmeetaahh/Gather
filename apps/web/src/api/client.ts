@@ -24,7 +24,7 @@ export class ApiRequestError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /** The user's access token. Public endpoints omit it. */
   accessToken?: string;
   body?: unknown;
@@ -58,6 +58,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       body?.error?.fieldErrors ?? [],
     );
   }
+  // DELETE /api/scores/:playedOn answers 204 with no body; nothing to parse.
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 

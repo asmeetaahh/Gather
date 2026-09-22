@@ -5,6 +5,7 @@ import {
   DRAW_ERROR_CODES,
   type DrawResponse,
   type ListDrawsResponse,
+  type ListMyDrawParticipationResponse,
 } from '@gather/shared';
 import { AppError, ValidationError } from '../errors.js';
 import type { DrawService } from './service.js';
@@ -57,6 +58,22 @@ export function createDrawsAdminRouter(service: DrawService): Router {
       throw new AppError(404, DRAW_ERROR_CODES.notFound, 'No such draw exists.');
     }
     const body: DrawResponse = { draw: await service.publish(req.params.id, callerId(req)) };
+    res.json(body);
+  });
+
+  return router;
+}
+
+/**
+ * A signed-in user's own draw participation — `/api/me/draws` (PRD §10 DSH-04). Mounted behind
+ * `requireAuth` only (no admin check): every draw returned is scoped to the caller by
+ * `DrawService.listMine`, which only ever reads published draws (D-050).
+ */
+export function createMyDrawsRouter(service: DrawService): Router {
+  const router = Router();
+
+  router.get('/', async (req, res) => {
+    const body: ListMyDrawParticipationResponse = await service.listMine(callerId(req));
     res.json(body);
   });
 

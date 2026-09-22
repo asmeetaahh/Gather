@@ -1,5 +1,17 @@
-/* Minimal placeholder styles for the Phase 0 shell. Real design system comes later. */
+/* Shared styles for every page. Not the full "Feel, not fairway" design system (UX-01..06, still a
+   later phase) — clean, responsive and accessible typography/spacing/cards for the functional UI
+   built so far, so it reads as one coherent product rather than unstyled HTML. */
 :root {
+  --gap: 1rem;
+  --gap-lg: 1.5rem;
+  --radius: 0.5rem;
+  --border: #d8dee6;
+  --muted: #5b6472;
+  --accent: #1f6f5c;
+  --danger: #b00020;
+  --bg: #ffffff;
+  --bg-subtle: #f6f8fa;
+  --fg: #1a1d21;
   font-family:
     system-ui,
     -apple-system,
@@ -9,22 +21,82 @@
   color-scheme: light dark;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --border: #333a42;
+    --bg: #14171a;
+    --bg-subtle: #1c2024;
+    --fg: #e8eaed;
+    --muted: #9aa4b1;
+    --accent: #4fb69b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 .shell {
-  max-width: 40rem;
+  max-width: 64rem;
   margin: 0 auto;
-  padding: 4rem 1rem;
+  padding: 0 1rem 4rem;
 }
 
-/* Minimal placeholder styling for the Phase 2 auth screens. Real design system comes later. */
 .shell nav {
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
+  align-items: center;
+  gap: var(--gap);
+  padding: 1rem 0;
   flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--gap-lg);
+}
+
+.shell nav a {
+  color: inherit;
+  text-decoration: none;
+  padding: 0.25rem 0;
+}
+
+.shell nav a:hover,
+.shell nav a:focus-visible {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+section > h1 + dl {
+  margin-top: 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem var(--gap);
+  max-width: 28rem;
+}
+
+dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
 }
 
 form {
@@ -36,14 +108,81 @@ form {
 label {
   display: grid;
   gap: 0.25rem;
+  font-weight: 600;
 }
 
 input,
+select,
 button {
   font: inherit;
-  padding: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button {
+  cursor: pointer;
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--accent);
+}
+
+ul[aria-label] {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+ul[aria-label] li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Dashboard: a responsive card grid (PRD §10 DSH-01..05). One column on narrow/mobile screens,
+   several on wider ones — no fixed pixel breakpoint assumptions beyond a phone-width minimum. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--gap-lg);
+  margin: var(--gap-lg) 0;
+}
+
+.dashboard-grid article {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  background: var(--bg-subtle);
+}
+
+.dashboard-grid article h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
 }
 
 [role='alert'] {
-  color: #b00020;
+  color: var(--danger);
+}
+
+[role='status'] {
+  color: var(--muted);
 }

@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DrawMode, DrawStatus, DrawTierResultDto } from '@gather/shared';
+import type {
+  DrawMode,
+  DrawStatus,
+  DrawTierResultDto,
+  MyDrawParticipationDto,
+} from '@gather/shared';
 import type { NumberRange, PaymentBasis } from './domain.js';
 
 /**
@@ -100,6 +105,15 @@ export interface DrawRepository {
 
   simulate(input: SimulateInput): Promise<void>;
   publish(drawId: string, publishedBy: string): Promise<PublishResult>;
+
+  /**
+   * One row per PUBLISHED draw `userId` was entered in, newest first (PRD §10 DSH-04). Explicitly
+   * filtered to `status = 'published'` here — the service role bypasses RLS, so this mirrors what the
+   * `draw_entries_select_own_published` policy already restricts a direct browser read to (D-050:
+   * candidate results must never leak), the same "the repository re-applies the filter RLS would have
+   * applied" pattern already used for charities (listed-only) and winners (owner-only).
+   */
+  listMyParticipation(userId: string): Promise<MyDrawParticipationDto[]>;
 }
 
 // ---- Row parsing (an untyped boundary) -----------------------------------------------------------
@@ -397,6 +411,30 @@ export function createSupabaseDrawRepository(client: SupabaseClient): DrawReposi
         throw new Error('Publish returned an unexpected result');
       }
       return data;
+    },
+
+    async listMyParticipation(userId) {
+      const { data, error } = await client
+        .from('draw_entries')
+        .select('match_count, draws!inner(id, draw_month, mode, status, winning_numbers)')
+        .eq('user_id', userId)
+        .eq('draws.status', 'published');
+      if (error) throw new Error(`Draw participation lookup failed: ${error.message}`);
+      const parsed = (data as unknown[]).map((raw): MyDrawParticipationDto => {
+        if (!isRow(raw)) return malformed('draw entry');
+        const draw = raw.draws;
+        if (!isRow(draw)) return malformed('draw entry');
+        return {
+          drawId: str(draw.id, 'draw entry'),
+          drawMonth: str(draw.draw_month, 'draw entry'),
+          mode: mode(draw.mode, 'draw entry'),
+          winningNumbers: numbers(draw.winning_numbers, 'draw entry'),
+          matchCount: int(raw.match_count, 'draw entry'),
+        };
+      });
+      // Newest month first (PRD §10 DSH-04); sorted here rather than via a cross-table PostgREST
+      // order, mirroring findById()'s own tierResults sort above.
+      return parsed.sort((a, b) => b.drawMonth.localeCompare(a.drawMonth));
     },
   };
 }

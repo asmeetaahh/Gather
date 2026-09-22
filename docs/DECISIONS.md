@@ -66,6 +66,7 @@ how the Phase 1 database stays neutral so the eventual answer needs no redesign.
 | D-070               | Phase 5 owner decisions: access, contribution basis, history, prices            | ACCEPTED (project) |
 | D-071               | Draw engine: matching, range, weighting, pool, tiers, rollover, lifecycle       | ACCEPTED (project) |
 | D-072               | Winner verification/payout: resubmission, upload transport, payout order, audit | ACCEPTED (project) |
+| D-073               | User dashboard: composition, the /api/me/draws endpoint, what stays unbuilt     | ACCEPTED (project) |
 | D-011 … D-033       | Product decisions                                                               | see Section 4      |
 
 ## How to add or resolve a decision
@@ -743,8 +744,8 @@ supabase-shim.sql`) for roles, `auth`, `storage` and Supabase's default privileg
   mechanism for applying an Owner rule, not a new business value) — the same convention as D-067…D-070. Nothing
   labelled _Implementation_ should be quoted as an owner decision. What remains genuinely open is listed at the end
   of each superseded entry (D-011…D-020) and is **not** resolved here.
-- **PRD requirements served:** DRW-01, 03, 04, 05, 06, 07, 08, 09 (§06/§07); DSH-04 is not built (no dashboard, per
-  the kickoff instruction).
+- **PRD requirements served:** DRW-01, 03, 04, 05, 06, 07, 08, 09 (§06/§07); DSH-04 was not built in this phase (no
+  dashboard, per the kickoff instruction) — its read endpoint was added in Phase 8 (D-073).
 - **Owner — a ticket is the user's latest scores (resolves D-011's "what does a user hold").** Each ELIGIBLE user's
   ticket is the (up to five) distinct values among their latest Stableford scores. A user with fewer than five
   scores simply has a smaller ticket (D-016) — and, as a direct mathematical consequence, cannot reach a match count
@@ -844,9 +845,10 @@ supabase-shim.sql`) for roles, `auth`, `storage` and Supabase's default privileg
   after the fact (D-019's residual); whether algorithmic weighting should ever favour rare scores or a different
   population (D-013's residual); payout mechanics and admin permission granularity (D-021…D-023, unaffected by this
   phase — winners/proof/payout use the already-built Phase 1 schema, untouched).
-- **Deliberately not built:** the draw engine has no scheduler/cron — an admin explicitly creates, simulates and
-  publishes a draw (no dashboard UI, per the kickoff instruction); a "my participation" read endpoint (DSH-04) was
-  not added (not required by the engine itself, and the instruction excludes dashboard-adjacent UI work).
+- **Deliberately not built (at the time):** the draw engine has no scheduler/cron — an admin explicitly creates,
+  simulates and publishes a draw (no dashboard UI, per the kickoff instruction); a "my participation" read
+  endpoint (DSH-04) was not added then (not required by the engine itself, and the instruction excluded
+  dashboard-adjacent UI work) — **added in Phase 8, see D-073.**
 - **Tests:** `apps/api/src/draws/domain.test.ts` (matching, both modes, pool/tier maths, rollover, remainder —
   pure, no database), `apps/api/src/draws/{repository,service,routes}.test.ts` (orchestration, configuration
   refusals, authorization, the full HTTP lifecycle, idempotent/concurrent publish),
@@ -926,6 +928,50 @@ approved | rejected`, with `rejected` explicitly re-openable back to `awaiting_p
   resubmission round-trip against the real storage RLS policy), `supabase/tests/storage.test.ts` (extended: a
   reopened winner's upload is permitted again by the SAME pre-existing policy), `packages/shared/src/winners.test.ts`
   (request validation).
+
+### D-073 — User dashboard: composition, the one missing endpoint, and what stays honestly unbuilt (2026-09-22)
+
+- **Status:** ACCEPTED (project) — **implementation decisions**, made by this codebase because the PRD only
+  lists WHAT the dashboard shows (DSH-01…05), not how it is composed from the already-built pages and APIs.
+- **PRD — the five areas (§10).** Subscription status/plan/renewal/cancellation (DSH-01); score entry and edit
+  (DSH-02); selected charity and percentage (DSH-03); draws entered and upcoming draws (DSH-04); winnings and
+  payment status (DSH-05).
+- **Implementation — composition: summaries + links, not five copies of the same logic (item 8: "do not
+  duplicate business logic in the frontend").** Subscription, charity and winnings already have complete,
+  tested pages (`/account/subscription`, `/account/charity`, `/account/winnings` — Phases 4/5/7) with real
+  interaction Stripe Checkout/Portal, charity directory browsing, proof upload/reopen. The dashboard shows a
+  live summary of each (same API calls, same DTOs, condensed rendering) with a link to the full page, rather
+  than re-implementing checkout, the charity directory or proof upload a second time. Scores had **no** page at
+  all (Phase 3 built only the API) and are simple enough to need no separate page, so DSH-02's full add/edit/delete
+  interface is built directly into the dashboard.
+- **Implementation — the one genuinely missing backend piece: `GET /api/me/draws` (DSH-04 "draws entered").**
+  D-071 explicitly recorded that no such endpoint existed ("a 'my participation' read endpoint (DSH-04) was not
+  added"). Added now, as the minimal missing piece the task instructions anticipated ("unless an existing
+  contract is genuinely missing something required by the dashboard") — no migration, no new table, no RLS
+  change: a plain service-role read of `draw_entries` joined to `draws`, **explicitly filtered to
+  `status = 'published'`**, mirroring exactly what the pre-existing `draw_entries_select_own_published` RLS
+  policy already restricts a direct browser read to (D-050: candidate results must never leak), the same
+  "repository re-applies the filter RLS would have applied" pattern already used for charities (listed-only)
+  and winners (owner-only). Winning numbers are included in the response because the draw is published, so
+  they are already public information.
+- **Implementation — "upcoming draws" (the other half of DSH-04): honestly not built.** D-017 (cadence, cutoff,
+  schedule) is still open and nothing in this codebase knows when the next draw will run; a draft/simulated
+  draw's candidate content must never leak to a non-admin regardless (D-050, re-verified by a test here). The
+  dashboard says plainly that draws run monthly and a result appears once published — it does not fabricate a
+  schedule or countdown, per the task's own instruction not to invent data to make the UI look populated.
+- **Implementation — restricted access (D-030) is still not decided, and the dashboard invents no new gate.**
+  Every section reads exactly what its existing endpoint already returns to a lapsed or non-subscribed user
+  (e.g. scores stay readable per D-062; a subscription card simply shows "not subscribed yet"). No new
+  client-side or server-side gating was added for this phase.
+- **Implementation — each section loads and fails independently** (`useMyData`, `apps/web/src/lib/useMyData.ts`):
+  one section's error (e.g. Stripe unconfigured, billing down) never blanks the other four, satisfying item 6
+  (clear loading/empty/error states) at the level of each PRD area rather than one all-or-nothing page state.
+- **Not decided here (still open):** D-017 (schedule), D-030 (restricted-access scope), D-023 (finer admin
+  permissions) — unaffected by this phase.
+- **Tests:** `apps/api/src/draws/{repository,service,routes}.test.ts` (the new endpoint: ownership scoping,
+  published-only filtering, empty state), `apps/web/src/dashboard.test.tsx` (loading/empty/error per section,
+  real-data rendering from real DTOs, cross-user isolation, full score add/edit/delete), `packages/shared/src/draws.test.ts`
+  (the new path constant).
 
 ---
 

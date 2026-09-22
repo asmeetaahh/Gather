@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { API_ADMIN_DRAWS_PATH, DRAW_ERROR_CODES, parseCreateDrawRequest } from './draws.js';
+import {
+  API_ADMIN_DRAWS_PATH,
+  API_MY_DRAWS_PATH,
+  DRAW_ERROR_CODES,
+  parseCreateDrawRequest,
+} from './draws.js';
 
 describe('API_ADMIN_DRAWS_PATH', () => {
   it('is under the admin prefix', () => {
     expect(API_ADMIN_DRAWS_PATH).toBe('/api/admin/draws');
+  });
+});
+
+describe('API_MY_DRAWS_PATH', () => {
+  it('is under /api/me', () => {
+    expect(API_MY_DRAWS_PATH).toBe('/api/me/draws');
   });
 });
 

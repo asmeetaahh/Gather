@@ -9,22 +9,23 @@ concrete requirement demands it.
 
 ## 1. Status
 
-| Area                                                                          | Status                                                              |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Monorepo, tooling, scripts                                                    | Implemented (Phase 0)                                               |
-| Express app + `GET /api/health`, JSON errors, CORS                            | Implemented (Phase 0)                                               |
-| React shell that calls `/api/health`                                          | Implemented (placeholder UI only)                                   |
-| Shared contracts package                                                      | Implemented (health, errors, enums, constants)                      |
-| **PostgreSQL schema, RLS, grants, storage policies**                          | **Implemented (Phase 1)**                                           |
-| **Database tests (PGlite), development seed**                                 | **Implemented (Phase 1)**                                           |
-| **Authentication and authorization (Supabase Auth, roles, guards)**           | **Implemented (Phase 2)**                                           |
-| **Score engine (add / replace-oldest / edit / delete, atomic `add_score()`)** | **Implemented (Phase 3)**                                           |
-| **Charity domain (directory, profiles, spotlight, choice + percentage)**      | **Implemented (Phase 4)**                                           |
-| **Subscriptions and payments (Stripe test mode: Checkout, webhooks, Portal)** | **Implemented (Phase 5)**                                           |
-| **Draw engine (random/algorithmic draw, pool, tiers, rollover, lifecycle)**   | **Implemented (Phase 6)**                                           |
-| **Winner verification and payout tracking (proof, review, mark paid)**        | **Implemented (Phase 7)**                                           |
-| User/admin dashboards, reports and analytics, full admin tooling              | **Planned** — nothing beyond a minimal winner/proof flow exists yet |
-| Supabase project, Vercel project                                              | **Not provisioned** (must be new accounts)                          |
+| Area                                                                             | Status                                                              |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Monorepo, tooling, scripts                                                       | Implemented (Phase 0)                                               |
+| Express app + `GET /api/health`, JSON errors, CORS                               | Implemented (Phase 0)                                               |
+| React shell that calls `/api/health`                                             | Implemented (placeholder UI only)                                   |
+| Shared contracts package                                                         | Implemented (health, errors, enums, constants)                      |
+| **PostgreSQL schema, RLS, grants, storage policies**                             | **Implemented (Phase 1)**                                           |
+| **Database tests (PGlite), development seed**                                    | **Implemented (Phase 1)**                                           |
+| **Authentication and authorization (Supabase Auth, roles, guards)**              | **Implemented (Phase 2)**                                           |
+| **Score engine (add / replace-oldest / edit / delete, atomic `add_score()`)**    | **Implemented (Phase 3)**                                           |
+| **Charity domain (directory, profiles, spotlight, choice + percentage)**         | **Implemented (Phase 4)**                                           |
+| **Subscriptions and payments (Stripe test mode: Checkout, webhooks, Portal)**    | **Implemented (Phase 5)**                                           |
+| **Draw engine (random/algorithmic draw, pool, tiers, rollover, lifecycle)**      | **Implemented (Phase 6)**                                           |
+| **Winner verification and payout tracking (proof, review, mark paid)**           | **Implemented (Phase 7)**                                           |
+| **User dashboard (subscription, scores, charity, draws, winnings — DSH-01..05)** | **Implemented (Phase 8)**                                           |
+| Admin dashboard, reports and analytics, full admin tooling                       | **Planned** — only the minimal winner-review queue exists (Phase 7) |
+| Supabase project, Vercel project                                                 | **Not provisioned** (must be new accounts)                          |
 
 ## 2. Repository layout
 
@@ -63,13 +64,21 @@ Reads that belong to the signed-in user may go browser → Supabase (RLS confine
 ## 4. Frontend (`apps/web`)
 
 - **Implemented:** Vite + React 19 + TypeScript; dev proxy of `/api`; React Router with `/`, `/login`,
-  `/signup`, protected `/account` and admin-only `/admin` (placeholder pages, not the final UI); an
-  `AuthProvider` (Supabase session restoration, server-verified identity), route guards and a typed API
-  client that sends the bearer token. All protected screens are UX only — the API enforces access.
-- **Planned:** routing for the public site, subscriber area and admin area; a typed API client built on
-  `@gather/shared`; the "Feel, not fairway" design system with subtle motion; responsive layouts.
+  `/signup`, the charity directory/profile, subscription, charity-preference and winnings pages, the
+  signed-in **user dashboard** at `/account` (PRD §10 DSH-01..05 — Phase 8, `DashboardPage.tsx`: subscription,
+  charity and winnings summaries with links to their own full pages, a full score add/edit/delete interface,
+  and draw participation) and a minimal admin-only `/admin` winner-review queue; an `AuthProvider` (Supabase
+  session restoration, server-verified identity, plus a `storage` handle for the direct-to-bucket proof
+  upload, Phase 7), route guards and a typed API client that sends the bearer token. Every "my own data" fetch
+  goes through a small `useMyData` hook (`lib/useMyData.ts`) so independent dashboard sections load and fail
+  on their own. All protected screens are UX only — the API enforces access.
+- **Planned:** the "Feel, not fairway" design system with subtle motion (UX-01..06); the full admin dashboard
+  (reports/analytics, user/charity/draw management — Phase 9).
 - **Rules:** the bundle contains only public configuration (`VITE_*`). Route guards improve UX only; the API
-  and the database are the enforcement points (Sections 9 and 12).
+  and the database are the enforcement points (Sections 9 and 12). The dashboard duplicates no business rule:
+  score pre-validation reuses the exact shared functions the API itself validates with
+  (`playedOnError`/`stablefordScoreError`), and every other section only renders what its existing endpoint
+  returns.
 
 ## 5. Backend (`apps/api`)
 

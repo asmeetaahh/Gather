@@ -525,3 +525,70 @@ describe('publish', () => {
     ).rejects.toThrow(/Publish failed/);
   });
 });
+
+describe('listMyParticipation', () => {
+  const ROW = (overrides: Record<string, unknown> = {}) => ({
+    match_count: 3,
+    draws: {
+      id: 'd1',
+      draw_month: '2026-11-01',
+      mode: 'random',
+      status: 'published',
+      winning_numbers: [1, 2, 3, 4, 5],
+      ...overrides,
+    },
+  });
+
+  it('scopes by user id and filters to published draws only', async () => {
+    const { client: c, queries } = client(ok([ROW()]));
+    const result = await createSupabaseDrawRepository(c).listMyParticipation('u1');
+    expect(result).toEqual([
+      {
+        drawId: 'd1',
+        drawMonth: '2026-11-01',
+        mode: 'random',
+        winningNumbers: [1, 2, 3, 4, 5],
+        matchCount: 3,
+      },
+    ]);
+    expect(queries[0]?.table).toBe('draw_entries');
+    expect(queries[0]?.q.calls).toEqual([
+      expect.stringContaining('select('),
+      'eq(user_id=u1)',
+      'eq(draws.status=published)',
+    ]);
+  });
+
+  it('sorts newest month first', async () => {
+    const { client: c } = client(
+      ok([
+        ROW({ id: 'jan', draw_month: '2026-01-01' }),
+        ROW({ id: 'nov', draw_month: '2026-11-01' }),
+        ROW({ id: 'jun', draw_month: '2026-06-01' }),
+      ]),
+    );
+    const result = await createSupabaseDrawRepository(c).listMyParticipation('u1');
+    expect(result.map((r) => r.drawMonth)).toEqual(['2026-11-01', '2026-06-01', '2026-01-01']);
+  });
+
+  it('is empty when the user has no published-draw entries', async () => {
+    const { client: c } = client(ok([]));
+    expect(await createSupabaseDrawRepository(c).listMyParticipation('u1')).toEqual([]);
+  });
+
+  it('a query error is a plain failure', async () => {
+    await expect(
+      createSupabaseDrawRepository(client(fail(undefined, 'boom')).client).listMyParticipation(
+        'u1',
+      ),
+    ).rejects.toThrow(/Draw participation lookup failed/);
+  });
+
+  it('rejects a malformed row', async () => {
+    await expect(
+      createSupabaseDrawRepository(client(ok([{ match_count: 3 }])).client).listMyParticipation(
+        'u1',
+      ),
+    ).rejects.toThrow(/Malformed/);
+  });
+});

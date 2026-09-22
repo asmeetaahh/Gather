@@ -428,3 +428,58 @@ describe('publish (DRW-05; D-018/D-045/D-071: DRAFT → SIMULATED → PUBLISHED,
     expect(again).toEqual(first);
   });
 });
+
+describe('listMine (PRD §10 DSH-04: draws entered)', () => {
+  it('is empty when the user has never entered a published draw', async () => {
+    expect(await service.listMine(ALICE)).toEqual({ draws: [] });
+  });
+
+  it('lists a published draw the user entered, with the winning numbers and their match count', async () => {
+    repo.setNumberRange({ min: 1, max: 5 });
+    repo.seedEligible(ALICE, [1, 2, 3, 4, 5]);
+    repo.setActivePlanCurrency('USD');
+    const draw = await service.create(ADMIN, { drawMonth: '2026-11-01', mode: 'random' });
+    const simulated = await service.simulate(draw.id);
+    await service.publish(draw.id, ADMIN);
+
+    const { draws } = await service.listMine(ALICE);
+    expect(draws).toEqual([
+      {
+        drawId: draw.id,
+        drawMonth: '2026-11-01',
+        mode: 'random',
+        winningNumbers: simulated.winningNumbers,
+        matchCount: 5,
+      },
+    ]);
+  });
+
+  it('never includes a draft or simulated (unpublished) draw, even with a candidate entry (D-050)', async () => {
+    repo.setNumberRange({ min: 1, max: 5 });
+    repo.seedEligible(ALICE, [1, 2, 3]);
+    repo.setActivePlanCurrency('USD');
+    const draw = await service.create(ADMIN, { drawMonth: '2026-11-01', mode: 'random' });
+    await service.simulate(draw.id); // status: simulated, NOT published
+
+    expect(await service.listMine(ALICE)).toEqual({ draws: [] });
+  });
+
+  it("never includes another user's participation", async () => {
+    repo.setNumberRange({ min: 1, max: 5 });
+    repo.seedEligible(ALICE, [1, 2, 3]);
+    repo.seedEligible(BOB, [1, 2, 3]);
+    repo.setActivePlanCurrency('USD');
+    const draw = await service.create(ADMIN, { drawMonth: '2026-11-01', mode: 'random' });
+    await service.simulate(draw.id);
+    await service.publish(draw.id, ADMIN);
+
+    const bobs = await service.listMine(BOB);
+    const alices = await service.listMine(ALICE);
+    // Both entered the same draw; each caller's own call is scoped to their own participation only —
+    // one entry each, never two (which would mean the other user's row had leaked in).
+    expect(bobs.draws).toHaveLength(1);
+    expect(alices.draws).toHaveLength(1);
+    expect(bobs.draws[0]?.drawId).toBe(draw.id);
+    expect(alices.draws[0]?.drawId).toBe(draw.id);
+  });
+});

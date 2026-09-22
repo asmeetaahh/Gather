@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   API_ADMIN_DRAWS_PATH,
+  API_MY_DRAWS_PATH,
   DRAW_ERROR_CODES,
   type ApiErrorBody,
   type DrawResponse,
   type ListDrawsResponse,
+  type ListMyDrawParticipationResponse,
 } from '@gather/shared';
 import { createApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import { ADMIN, ALICE, createTestAuth, type TestAuth } from '../test-support/auth.js';
+import { ADMIN, ALICE, BOB, createTestAuth, type TestAuth } from '../test-support/auth.js';
 import { InMemoryDraws } from '../test-support/draws.js';
 import { request, type TestResponse } from '../test-support/http.js';
 import { createDrawService } from './service.js';
@@ -20,6 +22,7 @@ let repo: InMemoryDraws;
 let app: ReturnType<typeof createApp>;
 let adminToken: string;
 let aliceToken: string;
+let bobToken: string;
 
 function buildApp(deps: { draws?: boolean } = {}) {
   return createApp(config, {
@@ -32,12 +35,14 @@ beforeEach(async () => {
   auth = await createTestAuth();
   auth.profiles.add(ADMIN, 'admin');
   auth.profiles.add(ALICE, 'user');
+  auth.profiles.add(BOB, 'user');
   repo = new InMemoryDraws();
   repo.setPoolBps(1000);
   repo.setActivePlanCurrency('USD');
   app = buildApp();
   adminToken = await auth.signToken(ADMIN);
   aliceToken = await auth.signToken(ALICE);
+  bobToken = await auth.signToken(BOB);
 });
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -331,5 +336,60 @@ describe('there is no way to delete or directly edit a draw over HTTP', () => {
         .set(bearer(adminToken));
       expect(res.status, method).toBe(404);
     }
+  });
+});
+
+describe('every /api/me/draws endpoint requires sign-in (PRD §10 DSH-04)', () => {
+  it('GET /api/me/draws without a token → 401', async () => {
+    expect((await request(app).get(API_MY_DRAWS_PATH)).status).toBe(401);
+  });
+
+  it('GET /api/me/draws with a forged token → 401', async () => {
+    const forged = await auth.signWithUntrustedKey(ALICE);
+    expect((await request(app).get(API_MY_DRAWS_PATH).set(bearer(forged))).status).toBe(401);
+  });
+
+  it('GET /api/me/draws → 503 when the draw service is not wired', async () => {
+    const bare = buildApp({ draws: false });
+    expect((await request(bare).get(API_MY_DRAWS_PATH).set(bearer(aliceToken))).status).toBe(503);
+  });
+});
+
+describe('GET /api/me/draws — a signed-in user sees only their own published-draw participation', () => {
+  it('is empty for a user who has never entered a published draw', async () => {
+    const res = await request(app).get(API_MY_DRAWS_PATH).set(bearer(aliceToken));
+    expect(res.status).toBe(200);
+    expect((res.body as ListMyDrawParticipationResponse).draws).toEqual([]);
+  });
+
+  it("lists the caller's own participation, never another user's, and never a candidate (unpublished) draw", async () => {
+    repo.seedEligible(ALICE, [1, 2, 3, 4, 5]);
+    repo.seedEligible(BOB, [1, 2, 3]);
+    repo.setNumberRange({ min: 1, max: 5 });
+    const created = await request(app)
+      .post(API_ADMIN_DRAWS_PATH)
+      .set(bearer(adminToken))
+      .send({ drawMonth: '2026-11-01', mode: 'random' });
+    const id = (created.body as DrawResponse).draw.id;
+    await request(app).post(`${API_ADMIN_DRAWS_PATH}/${id}/simulate`).set(bearer(adminToken));
+
+    // Still only 'simulated' — a candidate result. Neither user should see it yet (D-050).
+    const beforePublish = await request(app).get(API_MY_DRAWS_PATH).set(bearer(aliceToken));
+    expect((beforePublish.body as ListMyDrawParticipationResponse).draws).toEqual([]);
+
+    await request(app).post(`${API_ADMIN_DRAWS_PATH}/${id}/publish`).set(bearer(adminToken));
+
+    const aliceRes = await request(app).get(API_MY_DRAWS_PATH).set(bearer(aliceToken));
+    expect(aliceRes.status).toBe(200);
+    const aliceDraws = (aliceRes.body as ListMyDrawParticipationResponse).draws;
+    expect(aliceDraws).toHaveLength(1);
+    expect(aliceDraws[0]).toMatchObject({ drawId: id, drawMonth: '2026-11-01', matchCount: 5 });
+
+    const bobRes = await request(app).get(API_MY_DRAWS_PATH).set(bearer(bobToken));
+    const bobDraws = (bobRes.body as ListMyDrawParticipationResponse).draws;
+    expect(bobDraws).toHaveLength(1);
+    expect(bobDraws[0]?.drawId).toBe(id);
+    // Different callers, same draw, each sees only their OWN match count — never the other's.
+    expect(bobDraws[0]?.matchCount).not.toBe(aliceDraws[0]?.matchCount);
   });
 });
