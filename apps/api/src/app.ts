@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express, { type Express, type RequestHandler } from 'express';
-import * as helmetModule from 'helmet';
+import helmetImport from 'helmet';
 import {
   API_ADMIN_BASE_PATH,
   API_ADMIN_CHARITIES_PATH,
@@ -54,14 +54,16 @@ import type { ScoreService } from './scores/service.js';
 import { createMyWinnersRouter, createWinnersAdminRouter } from './winners/routes.js';
 import type { WinnerService } from './winners/service.js';
 
-// A plain default import (`import helmet from 'helmet'`) is unreliable under NodeNext module
-// resolution: helmet's package.json "exports" map has no explicit "types" condition, so which
-// declaration file (and therefore which default-export interop TypeScript infers) gets picked can
-// vary by environment (works locally, failed on Vercel with "has no call signatures" — TS2349).
-// Importing the namespace and reading `.default` sidesteps that interop detection entirely; both of
-// helmet's declaration files type `.default` identically as the callable `Helmet` function, and
-// Node's real ESM loader always exposes `.default` the same way regardless of the module's own format.
-const helmet = helmetModule.default;
+// helmet's package.json "exports" map has no explicit "types" condition (only "import"/"require"
+// pointing at .mjs/.cjs; types are advertised only via the legacy top-level "types" field), so how
+// TypeScript's NodeNext resolver infers the default export's type is environment-dependent — it
+// type-checked correctly locally but Vercel's toolchain resolved `helmet` (and even `.default`) as
+// the non-callable module namespace itself (TS2349). Rather than depend on any environment resolving
+// helmet's own ambiguous declaration file the same way, assert the one fact this call relies on: it
+// is a function taking no arguments that returns an Express request handler — true of every helmet
+// 8.x release regardless of how its types happen to resolve. This changes nothing at runtime: the
+// underlying JS value (and therefore what actually runs) is untouched.
+const helmet = helmetImport as unknown as () => RequestHandler;
 
 export interface AppDeps {
   /** Authentication dependencies. When absent, every authenticated route answers 503. */
