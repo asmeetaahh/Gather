@@ -1,0 +1,40 @@
+{
+  "name": "gather",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GATHER — golf performance, charity and monthly prize-draw platform",
+  "type": "module",
+  "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "supabase/tests"
+  ],
+  "scripts": {
+    "dev": "npm run build:shared && concurrently -n shared,api,web -c gray,cyan,magenta \"npm run dev -w @gather/shared\" \"npm run dev -w @gather/api\" \"npm run dev -w @gather/web\"",
+    "build": "npm run build:shared && npm run build -w @gather/api && npm run build -w @gather/web",
+    "build:shared": "npm run build -w @gather/shared",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build:shared && npm run test --workspaces --if-present",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.8",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

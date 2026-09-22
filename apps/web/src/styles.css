@@ -1,0 +1,49 @@
+/* Minimal placeholder styles for the Phase 0 shell. Real design system comes later. */
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 4rem 1rem;
+}
+
+/* Minimal placeholder styling for the Phase 2 auth screens. Real design system comes later. */
+.shell nav {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  flex-wrap: wrap;
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 24rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 0.5rem;
+}
+
+[role='alert'] {
+  color: #b00020;
+}

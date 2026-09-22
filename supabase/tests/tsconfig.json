@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // These files are executed by Vitest (a bundler), not by Node directly, so extensionless
+    // relative imports are correct here.
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["**/*.ts", "vitest.config.ts"]
+}

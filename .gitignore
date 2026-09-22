@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment files — NEVER commit secrets. Only *.example templates are tracked.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+
+# Tooling
+.vercel/
+.turbo/
+.eslintcache
+supabase/.branches/
+supabase/.temp/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Root CLAUDE.md stays local and is never committed (anchored to the repo root only)
+/CLAUDE.md
+
+# Test artefacts
+playwright-report/
+test-results/
+
+# Local assignment source
+/docs/Digital-Heroes-PRD.pdf

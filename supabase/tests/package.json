@@ -1,0 +1,19 @@
+{
+  "name": "@gather/db-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Database tests: applies supabase/migrations to an in-process PostgreSQL (PGlite) and verifies constraints, RLS and storage policies",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^26.6.2",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "@gather/shared": "^0.0.0"
+  }
+}

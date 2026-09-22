@@ -1,0 +1,31 @@
+{
+  "name": "@gather/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GATHER React + Vite frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@gather/shared": "^0.0.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}
