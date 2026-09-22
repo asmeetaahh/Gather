@@ -33,7 +33,11 @@ export function createPublicCharitiesRouter(service: CharityService): Router {
 
   router.get('/', async (req, res) => {
     const query = parseCharityListQuery(req.query);
-    if (!query.ok) throw new ValidationError(query.errors);
+    // `Parsed<T>` narrows on `ok`, but negating `!query.ok` does not always narrow it in every
+    // toolchain (seen as TS2339 "Property 'errors' does not exist on type 'Parsed<T>'"). Narrowing on
+    // the `errors` property itself — which only the failure variant has — is equivalent at runtime
+    // (a parse either produced errors or a value, never neither/both) and narrows reliably either way.
+    if ('errors' in query) throw new ValidationError(query.errors);
     const body: ListCharitiesResponse = await service.list(query.value);
     res.json(body);
   });
@@ -76,7 +80,8 @@ export function createMyCharityRouter(service: CharityService): Router {
 
   router.patch('/', async (req, res) => {
     const input = parseUpdateCharityPreference(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // See the identical comment in createPublicCharitiesRouter above.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: CharityPreferenceResponse = {
       preference: await service.updatePreference(callerId(req), input.value),
     };
@@ -113,7 +118,8 @@ export function createCharitiesAdminRouter(service: CharityService): Router {
 
   router.post('/', async (req, res) => {
     const input = parseCreateCharityRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // See the identical comment in createPublicCharitiesRouter above.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: AdminCharityResponse = { charity: await service.create(input.value) };
     res.status(201).json(body);
   });
@@ -127,7 +133,8 @@ export function createCharitiesAdminRouter(service: CharityService): Router {
   router.patch('/:id', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const input = parseUpdateCharityRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // See the identical comment in createPublicCharitiesRouter above.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: AdminCharityResponse = {
       charity: await service.update(req.params.id, input.value),
     };
