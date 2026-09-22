@@ -43,7 +43,11 @@ export function createMySubscriptionRouter(service: BillingService): Router {
 
   router.post('/checkout', async (req, res) => {
     const input = parseCreateCheckoutRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // `Parsed<T>` narrows on `ok`, but negating `!input.ok` does not always narrow it in every
+    // toolchain (seen as TS2339 "Property 'errors' does not exist on type 'Parsed<T>'"). Narrowing on
+    // the `errors` property itself — which only the failure variant has — is equivalent at runtime
+    // (a parse either produced errors or a value, never neither/both) and narrows reliably either way.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: RedirectResponse = await service.startCheckout(caller(req), input.value.interval);
     res.json(body);
   });
