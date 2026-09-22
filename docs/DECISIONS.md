@@ -23,49 +23,50 @@ how the Phase 1 database stays neutral so the eventual answer needs no redesign.
 
 ## Index
 
-| ID                  | Topic                                                                         | Status             |
-| ------------------- | ----------------------------------------------------------------------------- | ------------------ |
-| D-034               | Score rules                                                                   | ACCEPTED (PRD)     |
-| D-035               | Prize tiers, shares, rollover tiers, equal split                              | ACCEPTED (PRD)     |
-| D-036               | Charity minimum, increase, independent donations                              | ACCEPTED (PRD)     |
-| D-037               | Winner verification and payout workflow                                       | ACCEPTED (PRD)     |
-| D-038               | Roles and admin capabilities                                                  | ACCEPTED (PRD)     |
-| D-039               | Subscription status checked on every authenticated request                    | ACCEPTED (PRD)     |
-| D-040               | A draw has exactly 5 numbers                                                  | ACCEPTED (derived) |
-| D-041               | One draw per calendar month                                                   | ACCEPTED (derived) |
-| D-042               | Published draws are immutable; tier results snapshotted                       | ACCEPTED (derived) |
-| D-043               | Charities are archived, not erased, once they have history                    | ACCEPTED (derived) |
-| D-044               | One live subscription per user; active has a renewal date                     | ACCEPTED (derived) |
-| D-045               | Entries/winners: one per user per draw; winners only after publish            | ACCEPTED (derived) |
-| D-001, D-007..D-010 | Tooling, shared package, ports, error envelope                                | ACCEPTED (dev)     |
-| D-002..D-006        | Stack, money, service role, admin authz, PRD precedence                       | ACCEPTED (project) |
-| D-046               | Money as `bigint` minor units, percentages as basis points, currency per row  | ACCEPTED (dev)     |
-| D-047               | Database tests run on PGlite with a Supabase shim                             | ACCEPTED (dev)     |
-| D-048               | Browser roles are read-mostly; writes go through the API                      | ACCEPTED (dev)     |
-| D-049               | Score cap is reject-only; eviction stays in domain code                       | ACCEPTED (dev)     |
-| D-050               | Restrictive default for draw visibility                                       | ACCEPTED (dev)     |
-| D-051               | Storage buckets and development limits                                        | ACCEPTED (dev)     |
-| D-052               | Append-only admin audit log                                                   | ACCEPTED (dev)     |
-| D-053               | Financial history blocks hard deletion of accounts                            | ACCEPTED (dev)     |
-| D-054               | Database types: mirrored enums + constants, generated row types later         | ACCEPTED (dev)     |
-| D-055               | Development seed contains fictional charities only                            | ACCEPTED (dev)     |
-| D-056               | Email + password through Supabase Auth (provisional)                          | ACCEPTED (dev)     |
-| D-057               | Server-side token verification and DB-backed roles                            | ACCEPTED (dev)     |
-| D-058               | Credentials go browser → Supabase Auth; the API is a stateless token verifier | ACCEPTED (dev)     |
-| D-059               | Administrators are created only by a service-role/SQL operation               | ACCEPTED (dev)     |
-| D-060               | Authentication/authorization error semantics; UI guards are UX only           | ACCEPTED (dev)     |
-| D-061               | "Oldest" score = earliest round date; back-dated scores are rejected          | ACCEPTED (project) |
-| D-062               | Score API design and access rules                                             | ACCEPTED (dev)     |
-| D-063               | API tests are hermetic: in-process HTTP, no sockets                           | ACCEPTED (dev)     |
-| D-064               | Charity percentage: any value from 10% up, raise or lower                     | ACCEPTED (project) |
-| D-065               | Charity API, access rules and search design                                   | ACCEPTED (dev)     |
-| D-066               | Charity chosen at signup; required (and active) to subscribe                  | ACCEPTED (project) |
-| D-067               | Plans as data, Stripe Checkout/Portal (test mode), checkout eligibility       | ACCEPTED (dev)     |
-| D-068               | Webhooks: verified, idempotent, order-safe; subscription lifecycle mapping    | ACCEPTED (dev)     |
-| D-069               | Charity contribution amount, attribution snapshot; yearly plans in pools      | ACCEPTED (dev)     |
-| D-070               | Phase 5 owner decisions: access, contribution basis, history, prices          | ACCEPTED (project) |
-| D-071               | Draw engine: matching, range, weighting, pool, tiers, rollover, lifecycle     | ACCEPTED (project) |
-| D-011 … D-033       | Product decisions                                                             | see Section 4      |
+| ID                  | Topic                                                                           | Status             |
+| ------------------- | ------------------------------------------------------------------------------- | ------------------ |
+| D-034               | Score rules                                                                     | ACCEPTED (PRD)     |
+| D-035               | Prize tiers, shares, rollover tiers, equal split                                | ACCEPTED (PRD)     |
+| D-036               | Charity minimum, increase, independent donations                                | ACCEPTED (PRD)     |
+| D-037               | Winner verification and payout workflow                                         | ACCEPTED (PRD)     |
+| D-038               | Roles and admin capabilities                                                    | ACCEPTED (PRD)     |
+| D-039               | Subscription status checked on every authenticated request                      | ACCEPTED (PRD)     |
+| D-040               | A draw has exactly 5 numbers                                                    | ACCEPTED (derived) |
+| D-041               | One draw per calendar month                                                     | ACCEPTED (derived) |
+| D-042               | Published draws are immutable; tier results snapshotted                         | ACCEPTED (derived) |
+| D-043               | Charities are archived, not erased, once they have history                      | ACCEPTED (derived) |
+| D-044               | One live subscription per user; active has a renewal date                       | ACCEPTED (derived) |
+| D-045               | Entries/winners: one per user per draw; winners only after publish              | ACCEPTED (derived) |
+| D-001, D-007..D-010 | Tooling, shared package, ports, error envelope                                  | ACCEPTED (dev)     |
+| D-002..D-006        | Stack, money, service role, admin authz, PRD precedence                         | ACCEPTED (project) |
+| D-046               | Money as `bigint` minor units, percentages as basis points, currency per row    | ACCEPTED (dev)     |
+| D-047               | Database tests run on PGlite with a Supabase shim                               | ACCEPTED (dev)     |
+| D-048               | Browser roles are read-mostly; writes go through the API                        | ACCEPTED (dev)     |
+| D-049               | Score cap is reject-only; eviction stays in domain code                         | ACCEPTED (dev)     |
+| D-050               | Restrictive default for draw visibility                                         | ACCEPTED (dev)     |
+| D-051               | Storage buckets and development limits                                          | ACCEPTED (dev)     |
+| D-052               | Append-only admin audit log                                                     | ACCEPTED (dev)     |
+| D-053               | Financial history blocks hard deletion of accounts                              | ACCEPTED (dev)     |
+| D-054               | Database types: mirrored enums + constants, generated row types later           | ACCEPTED (dev)     |
+| D-055               | Development seed contains fictional charities only                              | ACCEPTED (dev)     |
+| D-056               | Email + password through Supabase Auth (provisional)                            | ACCEPTED (dev)     |
+| D-057               | Server-side token verification and DB-backed roles                              | ACCEPTED (dev)     |
+| D-058               | Credentials go browser → Supabase Auth; the API is a stateless token verifier   | ACCEPTED (dev)     |
+| D-059               | Administrators are created only by a service-role/SQL operation                 | ACCEPTED (dev)     |
+| D-060               | Authentication/authorization error semantics; UI guards are UX only             | ACCEPTED (dev)     |
+| D-061               | "Oldest" score = earliest round date; back-dated scores are rejected            | ACCEPTED (project) |
+| D-062               | Score API design and access rules                                               | ACCEPTED (dev)     |
+| D-063               | API tests are hermetic: in-process HTTP, no sockets                             | ACCEPTED (dev)     |
+| D-064               | Charity percentage: any value from 10% up, raise or lower                       | ACCEPTED (project) |
+| D-065               | Charity API, access rules and search design                                     | ACCEPTED (dev)     |
+| D-066               | Charity chosen at signup; required (and active) to subscribe                    | ACCEPTED (project) |
+| D-067               | Plans as data, Stripe Checkout/Portal (test mode), checkout eligibility         | ACCEPTED (dev)     |
+| D-068               | Webhooks: verified, idempotent, order-safe; subscription lifecycle mapping      | ACCEPTED (dev)     |
+| D-069               | Charity contribution amount, attribution snapshot; yearly plans in pools        | ACCEPTED (dev)     |
+| D-070               | Phase 5 owner decisions: access, contribution basis, history, prices            | ACCEPTED (project) |
+| D-071               | Draw engine: matching, range, weighting, pool, tiers, rollover, lifecycle       | ACCEPTED (project) |
+| D-072               | Winner verification/payout: resubmission, upload transport, payout order, audit | ACCEPTED (project) |
+| D-011 … D-033       | Product decisions                                                               | see Section 4      |
 
 ## How to add or resolve a decision
 
@@ -853,6 +854,79 @@ supabase-shim.sql`) for roles, `auth`, `storage` and Supabase's default privileg
   service-role-only privileges, a genuine two-month rollover chain), `packages/shared/src/draws.test.ts` (request
   validation).
 
+### D-072 — Winner verification and payout tracking: resubmission, upload transport, payout ordering, audit (2026-09-22)
+
+- **Status:** ACCEPTED (project) — **implementation decisions**, made by this codebase (not the owner) because
+  D-021/D-022 leave them genuinely open and Phase 7 needs a concrete, working mechanism. Each point below is
+  labelled **PRD** (§09/§11, already settled by D-037), **Implementation** (this codebase's own mechanism, not a
+  new business value, chosen as the minimal, most-consistent-with-the-existing-architecture reading), or **Still
+  open** (not resolved here). Winner CREATION itself is untouched — `publish_draw()` (D-071, migration `…150000`)
+  already creates exactly one winner per matching entry of a published draw, and the existing `winners_one_per_user_per_draw`
+  unique constraint plus the `guard_winner()` trigger (migration `…100500`) already make a duplicate or
+  unpublished-draw winner impossible; Phase 7 adds only the four lifecycle transitions after that point.
+- **PRD — the state machine.** Proof is a screenshot of scores; verification applies to winners only; admin
+  approves or rejects; payout goes Pending → Paid (D-037). Realised as `awaiting_proof → pending_review →
+approved | rejected`, with `rejected` explicitly re-openable back to `awaiting_proof` for resubmission.
+- **Implementation — resubmission after rejection (D-021's open "what happens to rejected proof?").** `rejected`
+  stays a real, queryable, persisted state (not silently collapsed back to `awaiting_proof`), so admin/analytics
+  queries can honestly show it. Resubmission is a distinct, **winner-triggered** step (`reopen_winner_proof()`,
+  SQLSTATE `GS010` if not currently `rejected`) — chosen over an admin-triggered or automatic reopen because the
+  task's own framing ("winner can upload/reopen") reads as a self-service action, and it needs no schema change.
+  Each resubmission round accumulates a NEW `winner_proofs` row rather than overwriting the last one (the table
+  already allowed multiple rows per winner, migration `…100500`'s own comment anticipated exactly this). On
+  reopen, `reviewed_at`/`reviewed_by`/`review_note` are cleared to "nothing decided yet" — required by the
+  existing `winners_review_timestamp` CHECK constraint, which ties those three columns to the CURRENT decision,
+  not history; the permanent record of who rejected what, and why, lives in `admin_audit_log` instead (written
+  by the API alongside the admin's `review_winner()` call).
+- **Implementation — proof upload transport (not decided by any prior DECISIONS entry).** The screenshot's BYTES
+  go directly browser → the private `winner-proofs` bucket, using the winner's own session, gated entirely by
+  the storage RLS policy already written in migration `…100800` (`winner_proofs_objects_insert_owner`: the
+  owner of the named winner record, into `<winner_id>/…`, only while `awaiting_proof`). This is not a new
+  design choice invented for this decision — it is the ONLY reading consistent with that policy's own shape:
+  the policy encodes a business rule (upload only while `awaiting_proof`) that would be pointless to write in
+  RLS if every upload were instead going to go through the service role (which bypasses RLS entirely), and the
+  Phase 1 migration's own comment says so explicitly ("Downloads are served via short-lived signed URLs issued
+  by the API — the bucket is never made public", implying uploads are not). The API never sees the file bytes;
+  it only ever records METADATA (`winner_proofs.storage_path`) and drives the state machine, via
+  `register_winner_proof()` — which independently verifies, server-side, that the referenced object actually
+  exists (`storage.objects`) and sits under the caller's own winner folder (SQLSTATE `GS009`, defence in depth
+  alongside the pre-existing `winner_proofs_path_under_winner` CHECK) before trusting a client's claim.
+- **Implementation — secure proof access (item 4 of the phase brief; not previously decided how).** Every read
+  of a winner's detail (owner's own, or an admin's) issues a FRESH short-lived (5-minute) signed URL per proof
+  via the service-role `createSignedUrl`, matching ARCHITECTURE.md §10's already-stated intent ("downloads use
+  short-lived signed URLs issued by the API"); the bucket itself is never made public and no permanent/public
+  URL is ever returned. The 5-minute TTL is a development default (D-051-style), not a PRD value.
+- **Implementation — payout ordering, extending D-022's explicitly open "may a payout be marked Paid before
+  proof is approved?".** A payout may be marked paid **only once verification is `approved`**
+  (`mark_winner_paid()`, SQLSTATE `GS012`), enforced in exactly one place so it can be relaxed later if the
+  owner decides otherwise. Chosen because it is the plain, minimal-invention reading of "the admin can verify
+  winners and payouts" (ROL-04/ADM-06: verification precedes payout in every mention) and because paying out
+  before verifying would defeat the purpose of verification. The schema itself still does **not** enforce this
+  (migration `…100500`'s original comment: "`paid` does not require `approved`, not enforced") — the ordering is
+  entirely an application-level (function-level) decision, not a new constraint, so it stays reversible without
+  a migration.
+- **Implementation — payout idempotency.** Marking an already-paid winner paid again is a safe no-op (same
+  `paid_at`/`paid_by`, mirroring `publish_draw()`'s established idempotency pattern), so a retried admin click
+  or a genuine double-submit can never silently reassign credit for a payout to a second admin.
+- **Implementation — admin actions are audited (D-052, ARCHITECTURE.md §13 "each admin action... in the same
+  request").** `review_winner()` and `mark_winner_paid()` are each followed by an `admin_audit_log` insert
+  (`winner.approved` / `winner.rejected` / `winner.paid`) written by the API in the same request, the first
+  actual use of that table outside its own schema tests. Not retrofitted onto Phase 6's `simulate`/`publish`
+  admin actions — out of scope for this phase, and flagged here as a real, currently-unaudited gap rather than
+  silently left unmentioned.
+- **Still open (not resolved here):** a claim deadline; what the admin actually checks the screenshot against
+  (still a human judgement call — no OCR or image processing exists, ARCHITECTURE.md §10); the real payout
+  mechanism (bank transfer, manual, …) and whether further payout states exist (D-022's residual); whether a
+  winner who never completes verification should feed back into the draw engine's "unclaimed" jackpot rollover
+  (D-019's residual, genuinely separate from this phase's synchronous reject/approve — the draw engine only
+  looks at zero-winner tiers at publish time, never at post-publish verification outcomes); finer admin
+  permission granularity (D-023).
+- **Tests:** `apps/api/src/winners/{repository,service,routes}.test.ts`, `supabase/tests/winners-function.test.ts`
+  (the four SQL functions on real PostgreSQL: atomicity, idempotency, service-role-only privileges, the full
+  resubmission round-trip against the real storage RLS policy), `supabase/tests/storage.test.ts` (extended: a
+  reopened winner's upload is permitted again by the SAME pre-existing policy), `packages/shared/src/winners.test.ts`
+  (request validation).
+
 ---
 
 ## 4. Unresolved product decisions
@@ -984,20 +1058,31 @@ Each entry names what it **blocks** and its **schema impact**. "Owner" is the pr
 
 ### D-021 — Winner proof and claim rules
 
-- **Status:** PARTIALLY RESOLVED — **Blocks:** verification flow refinements, storage limits.
+- **Status:** PARTIALLY RESOLVED, extended by implementation decision, 2026-09-22 (**D-072**) — **Blocks:**
+  verification flow refinements, storage limits.
 - **Resolved by PDF:** winners only; screenshot of scores; admin approve/reject.
-- **Still open:** claim deadline; what happens to rejected proof (resubmission?); file types/size; what the
-  admin checks it against; unclaimed prizes.
-- **Schema impact:** multiple proof rows per winner are allowed; direct upload only while `awaiting_proof`
-  (restrictive default, D-051).
+- **Resolved by D-072:** rejected proof CAN be resubmitted — the winner explicitly reopens (`rejected` stays a
+  real state until they do), then a full new upload/register round-trip runs, accumulating a further
+  `winner_proofs` row per attempt; file types/size are the pre-existing development defaults (PNG/JPEG/WebP,
+  10 MiB, D-051), now also exposed from `@gather/shared` so the web form can check them client-side.
+- **Still open:** a claim deadline; what the admin actually checks the screenshot against (a human judgement
+  call — no OCR exists); unclaimed prizes as a DRAW-ENGINE concept (D-019's residual — separate from a winner
+  simply never finishing verification).
+- **Schema impact:** unchanged — multiple proof rows per winner are allowed; direct upload only while
+  `awaiting_proof` (restrictive default, D-051); Phase 7 adds no migration to this table.
 
 ### D-022 — Payout mechanism and payment states
 
-- **Status:** PARTIALLY RESOLVED — **Blocks:** payout tracking refinements.
+- **Status:** PARTIALLY RESOLVED, extended by implementation decision, 2026-09-22 (**D-072**) — **Blocks:**
+  payout tracking refinements.
 - **Resolved by PDF:** states Pending → Paid; admins "mark payouts as completed".
-- **Still open:** how money actually reaches winners; other states (rejected, expired); may a payout be
-  marked Paid before proof is approved?
-- **Schema impact:** `paid` does **not** require `approved` (not enforced).
+- **Resolved by D-072:** a payout may be marked paid ONLY once verification is `approved` — enforced by
+  `mark_winner_paid()` (SQLSTATE `GS012`), not by a new schema constraint, so it stays a one-place, reversible
+  decision if the owner later wants otherwise; marking an already-paid winner paid again is a safe no-op.
+- **Still open:** how money actually reaches winners (bank transfer, manual, …); whether further payout states
+  exist (rejected, expired) beyond pending/paid.
+- **Schema impact:** unchanged — the `paid` column still does not itself require `approved` at the constraint
+  level (D-072's ordering lives in the function, not a CHECK).
 
 ### D-023 — Admin permission model
 

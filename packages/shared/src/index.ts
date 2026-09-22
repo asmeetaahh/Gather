@@ -9,3 +9,4 @@ export * from './errors.js';
 export * from './health.js';
 export * from './scores.js';
 export * from './billing.js';
+export * from './winners.js';

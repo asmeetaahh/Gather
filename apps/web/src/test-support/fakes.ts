@@ -6,8 +6,11 @@ import type {
   CharityPreferenceDto,
   CharitySummaryDto,
   MeResponse,
+  PayoutStatus,
   PlanDto,
   SubscriptionDto,
+  VerificationStatus,
+  WinnerDetailDto,
 } from '@gather/shared';
 import type { AuthClient } from '../auth/types';
 
@@ -92,7 +95,34 @@ export function createFakeAuthClient(initialSession: Session | null = null) {
     }),
   };
 
-  return { client: { auth } as unknown as AuthClient, auth, behaviour };
+  /** Knobs a test can turn for the direct-to-storage proof upload (ARCHITECTURE.md §10). */
+  const storageBehaviour = {
+    uploadError: null as { message: string } | null,
+  };
+  const uploadedObjects = new Map<string, { bucket: string; path: string }>();
+  const storage = {
+    from: vi.fn((bucket: string) => ({
+      upload: vi.fn((path: string, _file: unknown, _options?: { contentType?: string }) => {
+        if (storageBehaviour.uploadError) {
+          return Promise.resolve({ data: null, error: storageBehaviour.uploadError });
+        }
+        uploadedObjects.set(`${bucket}/${path}`, { bucket, path });
+        return Promise.resolve({
+          data: { id: 'obj1', path, fullPath: `${bucket}/${path}` },
+          error: null,
+        });
+      }),
+    })),
+  };
+
+  return {
+    client: { auth, storage } as unknown as AuthClient,
+    auth,
+    storage,
+    behaviour,
+    storageBehaviour,
+    uploadedObjects,
+  };
 }
 
 /** A charity as the public API returns it (profile shape), for `stubApi({ charities })`. */
@@ -122,12 +152,46 @@ export const ALICE: ApiUser = {
   role: 'user',
   displayName: null,
 };
+export const BOB: ApiUser = {
+  id: 'b1',
+  email: 'bob@example.test',
+  role: 'user',
+  displayName: null,
+};
 export const ADMIN: ApiUser = {
   id: 'ad',
   email: 'root@example.test',
   role: 'admin',
   displayName: 'Root',
 };
+
+/** A seeded winner for `stubApi({ winners })`, owned by whichever token created it. */
+export interface StubWinner {
+  id: string;
+  ownerToken: string;
+  drawMonth: string;
+  matchCount: 3 | 4 | 5;
+  prizeMinor: number;
+  currency: string;
+  verificationStatus: VerificationStatus;
+  payoutStatus: PayoutStatus;
+  reviewNote?: string | null;
+  proofs?: { id: string; storagePath: string; uploadedAt: string; url: string | null }[];
+}
+export function stubWinner(n: number, overrides: Partial<StubWinner> = {}): StubWinner {
+  return {
+    id: `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`,
+    ownerToken: 'token-alice',
+    drawMonth: '2027-01-01',
+    matchCount: 3,
+    prizeMinor: 1000,
+    currency: 'USD',
+    verificationStatus: 'awaiting_proof',
+    payoutStatus: 'pending',
+    proofs: [],
+    ...overrides,
+  };
+}
 
 /**
  * Stubs `fetch` as the GATHER API. `users` maps access tokens to the profile the API would return; any
@@ -160,6 +224,8 @@ export function stubApi(
     checkoutError?: { status: number; code?: string };
     /** Make `GET /api/plans` or `GET /api/me/subscription` fail with this status. */
     billingFail?: number;
+    /** Seeded winners, each owned by one access token (see `stubWinner`). */
+    winners?: StubWinner[];
   } = {},
 ) {
   const calls: {
@@ -263,6 +329,104 @@ export function stubApi(
     return json(200, { preference: preferenceOf(token) });
   }
 
+  // ---- winners (PRD §09/§11): mutable copy so upload/reopen/review/paid can change state ------
+  const winners = (options.winners ?? []).map((w) => ({ ...w, proofs: [...(w.proofs ?? [])] }));
+  const summaryOfWinner = (w: (typeof winners)[number]) => ({
+    id: w.id,
+    drawId: w.id,
+    drawMonth: w.drawMonth,
+    matchCount: w.matchCount,
+    prizeMinor: w.prizeMinor,
+    currency: w.currency,
+    verificationStatus: w.verificationStatus,
+    payoutStatus: w.payoutStatus,
+    createdAt: '2027-01-01T00:00:00Z',
+  });
+  const detailOfWinner = (w: (typeof winners)[number]): WinnerDetailDto => ({
+    ...summaryOfWinner(w),
+    reviewedAt: w.reviewNote ? '2027-01-02T00:00:00Z' : null,
+    reviewNote: w.reviewNote ?? null,
+    paidAt: w.payoutStatus === 'paid' ? '2027-01-03T00:00:00Z' : null,
+    proofs: [...w.proofs].reverse(),
+  });
+
+  /** `/api/me/winners/*`: scoped to the caller's own winners (owned by their token). */
+  function myWinners(token: string, path: string, method: string, body: unknown): Response {
+    const mine = winners.filter((w) => w.ownerToken === token);
+    if (path === '/api/me/winners') return json(200, { winners: mine.map(summaryOfWinner) });
+
+    const match = /^\/api\/me\/winners\/([^/]+)(\/proof(\/reopen)?)?$/.exec(path);
+    const id = match?.[1];
+    const w = mine.find((x) => x.id === id);
+    if (!w) return error(404, 'winner_not_found', 'No such winner exists.');
+
+    if (path === `/api/me/winners/${id}` && method === 'GET') {
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    if (path === `/api/me/winners/${id}/proof` && method === 'POST') {
+      if (w.verificationStatus !== 'awaiting_proof') {
+        return error(409, 'winner_proof_not_awaiting', 'This winner is not awaiting proof.');
+      }
+      const storagePath = (body as { storagePath?: string } | undefined)?.storagePath ?? '';
+      w.proofs.push({
+        id: `p${String(w.proofs.length + 1)}`,
+        storagePath,
+        uploadedAt: '2027-01-02T00:00:00Z',
+        url: `https://signed.test/${storagePath}`,
+      });
+      w.verificationStatus = 'pending_review';
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    if (path === `/api/me/winners/${id}/proof/reopen` && method === 'POST') {
+      if (w.verificationStatus !== 'rejected') {
+        return error(409, 'winner_not_rejected', 'Only a rejected submission can be reopened.');
+      }
+      w.verificationStatus = 'awaiting_proof';
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    return error(404, 'not_found', 'x');
+  }
+
+  /** `/api/admin/winners/*`: every winner, admin only (gated the same way `/api/admin/check` is). */
+  function adminWinners(
+    user: ApiUser,
+    token: string,
+    path: string,
+    method: string,
+    body: unknown,
+  ): Response {
+    const allowed = options.adminCheck ? options.adminCheck(token) === 200 : user.role === 'admin';
+    if (!allowed) return error(403, 'forbidden', 'x');
+
+    if (path === '/api/admin/winners') return json(200, { winners: winners.map(summaryOfWinner) });
+
+    const match = /^\/api\/admin\/winners\/([^/]+)(\/review|\/paid)?$/.exec(path);
+    const id = match?.[1];
+    const w = winners.find((x) => x.id === id);
+    if (!w) return error(404, 'winner_not_found', 'No such winner exists.');
+
+    if (path === `/api/admin/winners/${id}` && method === 'GET') {
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    if (path === `/api/admin/winners/${id}/review` && method === 'POST') {
+      if (w.verificationStatus !== 'pending_review') {
+        return error(409, 'winner_not_pending_review', 'This winner is not pending review.');
+      }
+      const patch = body as { decision?: 'approved' | 'rejected'; note?: string };
+      w.verificationStatus = patch.decision ?? w.verificationStatus;
+      w.reviewNote = patch.note ?? null;
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    if (path === `/api/admin/winners/${id}/paid` && method === 'POST') {
+      if (w.verificationStatus !== 'approved' && w.payoutStatus !== 'paid') {
+        return error(409, 'winner_not_approved_for_payout', 'Not approved yet.');
+      }
+      w.payoutStatus = 'paid';
+      return json(200, { winner: detailOfWinner(w) });
+    }
+    return error(404, 'not_found', 'x');
+  }
+
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -329,6 +493,10 @@ export function stubApi(
             : json(status, { error: { code: 'forbidden', message: 'x' } }),
         );
       }
+      if (path.startsWith('/api/me/winners'))
+        return Promise.resolve(myWinners(token, path, method, body));
+      if (path.startsWith('/api/admin/winners'))
+        return Promise.resolve(adminWinners(user, token, path, method, body));
       return Promise.resolve(json(404, { error: { code: 'not_found', message: 'x' } }));
     }),
   );

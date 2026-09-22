@@ -7,6 +7,12 @@ export interface AuthClient {
     SupabaseClient['auth'],
     'onAuthStateChange' | 'getSession' | 'signUp' | 'signInWithPassword' | 'signOut'
   >;
+  /**
+   * Winner proof is uploaded DIRECTLY browser -> the private `winner-proofs` bucket, gated by
+   * storage RLS on the caller's own, currently-`awaiting_proof` winner record (ARCHITECTURE.md
+   * §10) — never through the API, which only ever handles the resulting metadata.
+   */
+  storage: Pick<SupabaseClient['storage'], 'from'>;
 }
 
 /** The signed-in user as verified by the API (role from the database, not from the token). */
@@ -37,4 +43,6 @@ export interface AuthContextValue {
   signOut: () => Promise<void>;
   /** A fresh access token for API calls (supabase-js refreshes it when needed), or null if signed out. */
   getAccessToken: () => Promise<string | null>;
+  /** The configured client's storage handle, or null when Supabase is not configured. */
+  getStorage: () => AuthClient['storage'] | null;
 }

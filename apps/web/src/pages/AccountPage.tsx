@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/context';
 
 /** Placeholder protected page: proves routing and identity work. The real dashboard is a later phase. */
@@ -15,6 +16,9 @@ export function AccountPage() {
         <dt>Role</dt>
         <dd>{user.role}</dd>
       </dl>
+      <p>
+        <Link to="/account/winnings">Your winnings</Link>
+      </p>
       <button type="button" onClick={() => void signOut()}>
         Log out
       </button>

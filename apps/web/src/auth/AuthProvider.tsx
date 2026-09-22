@@ -135,9 +135,11 @@ export function AuthProvider({
     return data.session?.access_token ?? null;
   }, [client]);
 
+  const getStorage = useCallback(() => client?.storage ?? null, [client]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ state, signIn, signUp, signOut, getAccessToken }),
-    [state, signIn, signUp, signOut, getAccessToken],
+    () => ({ state, signIn, signUp, signOut, getAccessToken, getStorage }),
+    [state, signIn, signUp, signOut, getAccessToken, getStorage],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

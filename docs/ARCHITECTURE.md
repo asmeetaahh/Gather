@@ -9,20 +9,22 @@ concrete requirement demands it.
 
 ## 1. Status
 
-| Area                                                                          | Status                                         |
-| ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| Monorepo, tooling, scripts                                                    | Implemented (Phase 0)                          |
-| Express app + `GET /api/health`, JSON errors, CORS                            | Implemented (Phase 0)                          |
-| React shell that calls `/api/health`                                          | Implemented (placeholder UI only)              |
-| Shared contracts package                                                      | Implemented (health, errors, enums, constants) |
-| **PostgreSQL schema, RLS, grants, storage policies**                          | **Implemented (Phase 1)**                      |
-| **Database tests (PGlite), development seed**                                 | **Implemented (Phase 1)**                      |
-| **Authentication and authorization (Supabase Auth, roles, guards)**           | **Implemented (Phase 2)**                      |
-| **Score engine (add / replace-oldest / edit / delete, atomic `add_score()`)** | **Implemented (Phase 3)**                      |
-| **Charity domain (directory, profiles, spotlight, choice + percentage)**      | **Implemented (Phase 4)**                      |
-| **Subscriptions and payments (Stripe test mode: Checkout, webhooks, Portal)** | **Implemented (Phase 5)**                      |
-| Draws, winners, dashboards, admin tooling                                     | **Planned** — nothing exists yet               |
-| Supabase project, Vercel project                                              | **Not provisioned** (must be new accounts)     |
+| Area                                                                          | Status                                                              |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Monorepo, tooling, scripts                                                    | Implemented (Phase 0)                                               |
+| Express app + `GET /api/health`, JSON errors, CORS                            | Implemented (Phase 0)                                               |
+| React shell that calls `/api/health`                                          | Implemented (placeholder UI only)                                   |
+| Shared contracts package                                                      | Implemented (health, errors, enums, constants)                      |
+| **PostgreSQL schema, RLS, grants, storage policies**                          | **Implemented (Phase 1)**                                           |
+| **Database tests (PGlite), development seed**                                 | **Implemented (Phase 1)**                                           |
+| **Authentication and authorization (Supabase Auth, roles, guards)**           | **Implemented (Phase 2)**                                           |
+| **Score engine (add / replace-oldest / edit / delete, atomic `add_score()`)** | **Implemented (Phase 3)**                                           |
+| **Charity domain (directory, profiles, spotlight, choice + percentage)**      | **Implemented (Phase 4)**                                           |
+| **Subscriptions and payments (Stripe test mode: Checkout, webhooks, Portal)** | **Implemented (Phase 5)**                                           |
+| **Draw engine (random/algorithmic draw, pool, tiers, rollover, lifecycle)**   | **Implemented (Phase 6)**                                           |
+| **Winner verification and payout tracking (proof, review, mark paid)**        | **Implemented (Phase 7)**                                           |
+| User/admin dashboards, reports and analytics, full admin tooling              | **Planned** — nothing beyond a minimal winner/proof flow exists yet |
+| Supabase project, Vercel project                                              | **Not provisioned** (must be new accounts)                          |
 
 ## 2. Repository layout
 

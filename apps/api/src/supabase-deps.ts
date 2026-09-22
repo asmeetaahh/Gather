@@ -14,6 +14,8 @@ import { createSupabaseDrawRepository } from './draws/repository.js';
 import { createDrawService } from './draws/service.js';
 import { createSupabaseScoreRepository } from './scores/repository.js';
 import { createScoreService } from './scores/service.js';
+import { createSupabaseWinnerRepository } from './winners/repository.js';
+import { createWinnerService } from './winners/service.js';
 
 export interface DepsOptions {
   /** Stripe (test mode), or null: checkout, the billing portal and the webhook then answer 503. */
@@ -51,6 +53,7 @@ export function createSupabaseDeps(config: SupabaseConfig, options: DepsOptions)
       webOrigin: options.webOrigin,
     }),
     draws: createDrawService({ repository: createSupabaseDrawRepository(client) }),
+    winners: createWinnerService({ repository: createSupabaseWinnerRepository(client) }),
     ...(gateway && {
       stripeWebhook: createStripeWebhookHandler(
         gateway,

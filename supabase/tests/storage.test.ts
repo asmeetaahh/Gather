@@ -4,6 +4,7 @@ import { STORAGE_BUCKETS } from '@gather/shared';
 import {
   as,
   asOwner,
+  attempt,
   createMigratedDatabase,
   impersonate,
   PG,
@@ -79,7 +80,7 @@ describe('winner-proofs bucket is private (PRD §09)', () => {
     expect(err.code).toBe(PG.insufficientPrivilege);
   });
 
-  it('uploads stop once the proof is under review or decided (resubmission is undecided, D-021)', async () => {
+  it('uploads stop once the proof is under review or decided (D-021/D-037: only awaiting_proof may upload)', async () => {
     for (const status of ['pending_review', 'approved', 'rejected']) {
       await asOwner(db, async (tx) => {
         const extra = status === 'pending_review' ? '' : `, reviewed_at = now()`;
@@ -92,6 +93,28 @@ describe('winner-proofs bucket is private (PRD §09)', () => {
         expect(err.code, status).toBe(PG.insufficientPrivilege);
       });
     }
+  });
+
+  it('resubmission after rejection (Phase 7, D-021/D-037): reopen_winner_proof() is what lets the RLS upload succeed again', async () => {
+    await asOwner(db, async (tx) => {
+      await tx.query(
+        `update public.winners set verification_status = 'rejected', reviewed_at = now() where id = $1`,
+        [aliceWinner],
+      );
+      // Still rejected: the RLS policy alone never lets this through, on its own.
+      await impersonate(tx, asUser(alice));
+      const blocked = await attempt(tx, () => upload(PROOFS, `${aliceWinner}/resubmit.png`)(tx));
+      expect(blocked.code).toBe(PG.insufficientPrivilege);
+
+      // The service role explicitly reopens it (the only supported path back to awaiting_proof)...
+      await impersonate(tx, { role: 'service_role' });
+      await tx.query(`select public.reopen_winner_proof($1::uuid, $2::uuid)`, [aliceWinner, alice]);
+
+      // ...and now the SAME RLS policy that blocked the upload above permits it, unchanged.
+      await impersonate(tx, asUser(alice));
+      const res = await upload(PROOFS, `${aliceWinner}/resubmit.png`)(tx);
+      expect(res.affectedRows).toBe(1);
+    });
   });
 
   it('only the owner and admins can read proof; other users and anon see nothing', async () => {

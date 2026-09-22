@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import {
   API_ADMIN_BASE_PATH,
   API_ADMIN_DRAWS_PATH,
+  API_ADMIN_WINNERS_PATH,
   API_CHARITIES_PATH,
   API_CHARITY_SPOTLIGHT_PATH,
   API_HEALTH_PATH,
@@ -11,6 +12,7 @@ import {
   API_MY_CHARITY_PATH,
   API_MY_CONTRIBUTIONS_PATH,
   API_MY_SUBSCRIPTION_PATH,
+  API_MY_WINNERS_PATH,
   API_PLANS_PATH,
   API_SCORES_PATH,
   API_STRIPE_WEBHOOK_PATH,
@@ -40,6 +42,8 @@ import { healthRouter } from './routes/health.js';
 import { meRouter } from './routes/me.js';
 import { createScoresRouter } from './scores/routes.js';
 import type { ScoreService } from './scores/service.js';
+import { createMyWinnersRouter, createWinnersAdminRouter } from './winners/routes.js';
+import type { WinnerService } from './winners/service.js';
 
 export interface AppDeps {
   /** Authentication dependencies. When absent, every authenticated route answers 503. */
@@ -54,6 +58,8 @@ export interface AppDeps {
   stripeWebhook?: StripeWebhookHandler;
   /** Draw management (PRD §06/§07). When absent, the admin draw endpoints answer 503. */
   draws?: DrawService;
+  /** Winner verification and payout tracking (PRD §09/§11). When absent, those endpoints answer 503. */
+  winners?: WinnerService;
 }
 
 /** Stand-in for a feature whose dependencies were not supplied: refuse rather than guess. */
@@ -114,6 +120,13 @@ export function createApp(config: ApiConfig, deps: AppDeps = {}): Express {
     requireAuth(deps.auth),
     deps.charities ? createMyContributionsRouter(deps.charities) : unavailable,
   );
+  // The signed-in user's own winnings (PRD §10 DSH-05). Mounted BEFORE the generic /api/me for the
+  // same reason as charity/contributions above.
+  app.use(
+    API_MY_WINNERS_PATH,
+    requireAuth(deps.auth),
+    deps.winners ? createMyWinnersRouter(deps.winners) : unavailable,
+  );
 
   // Authenticated: any signed-in account, acting only as itself.
   app.use(API_ME_PATH, requireAuth(deps.auth), meRouter);
@@ -132,6 +145,12 @@ export function createApp(config: ApiConfig, deps: AppDeps = {}): Express {
     requireAuth(deps.auth),
     requireAdmin,
     deps.draws ? createDrawsAdminRouter(deps.draws) : unavailable,
+  );
+  app.use(
+    API_ADMIN_WINNERS_PATH,
+    requireAuth(deps.auth),
+    requireAdmin,
+    deps.winners ? createWinnersAdminRouter(deps.winners) : unavailable,
   );
   app.use(API_ADMIN_BASE_PATH, requireAuth(deps.auth), requireAdmin, adminRouter);
 

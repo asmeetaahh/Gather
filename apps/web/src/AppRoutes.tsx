@@ -11,6 +11,7 @@ import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
 import { SignupPage } from './pages/SignupPage';
+import { WinningsPage } from './pages/WinningsPage';
 
 /** Route table. Guards are UX only — the API enforces authentication and authorization (D-005). */
 export function AppRoutes() {
@@ -30,6 +31,7 @@ export function AppRoutes() {
           <Route path="account" element={<AccountPage />} />
           <Route path="account/charity" element={<CharityPreferencePage />} />
           <Route path="account/subscription" element={<SubscriptionPage />} />
+          <Route path="account/winnings" element={<WinningsPage />} />
           <Route element={<RequireAdmin />}>
             <Route path="admin" element={<AdminPage />} />
           </Route>
