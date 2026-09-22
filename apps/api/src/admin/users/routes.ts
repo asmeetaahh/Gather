@@ -40,7 +40,11 @@ export function createUsersAdminRouter(service: AdminUserService, scores: ScoreS
   router.patch('/:id', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const input = parseUpdateAdminUserRequest(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // `Parsed<T>` narrows on `ok`, but negating `!input.ok` does not always narrow it in every
+    // toolchain (seen as TS2339 "Property 'errors' does not exist on type 'Parsed<T>'"). Narrowing on
+    // the `errors` property itself — which only the failure variant has — is equivalent at runtime
+    // (a parse either produced errors or a value, never neither/both) and narrows reliably either way.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: AdminUserResponse = {
       user: await service.updateDisplayName(req.params.id, input.value),
     };
@@ -50,7 +54,8 @@ export function createUsersAdminRouter(service: AdminUserService, scores: ScoreS
   router.post('/:id/scores', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const input = parseCreateScore(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    // See the identical comment in the PATCH '/:id' handler above.
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: CreateScoreResponse = await scores.add(req.params.id, input.value);
     res.status(201).json(body);
   });
@@ -58,9 +63,10 @@ export function createUsersAdminRouter(service: AdminUserService, scores: ScoreS
   router.put('/:id/scores/:playedOn', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const date = parsePlayedOnParam(req.params.playedOn);
-    if (!date.ok) throw new ValidationError(date.errors);
+    // See the identical comment in the PATCH '/:id' handler above.
+    if ('errors' in date) throw new ValidationError(date.errors);
     const input = parseUpdateScore(req.body);
-    if (!input.ok) throw new ValidationError(input.errors);
+    if ('errors' in input) throw new ValidationError(input.errors);
     const body: UpdateScoreResponse = {
       score: await scores.edit(req.params.id, date.value, input.value.stablefordScore),
     };
@@ -70,7 +76,8 @@ export function createUsersAdminRouter(service: AdminUserService, scores: ScoreS
   router.delete('/:id/scores/:playedOn', async (req, res) => {
     if (!isUuid(req.params.id)) throw notFound();
     const date = parsePlayedOnParam(req.params.playedOn);
-    if (!date.ok) throw new ValidationError(date.errors);
+    // See the identical comment in the PATCH '/:id' handler above.
+    if ('errors' in date) throw new ValidationError(date.errors);
     await scores.remove(req.params.id, date.value);
     res.status(204).end();
   });
